@@ -34,11 +34,10 @@
 			</div>
 			<div class="right-side">
 				<div class="temperature-plot">
-					<p>Tu będzie wykres temperatury.</p>
-					<!-- <Chart/> -->
+					<Scatter :data="chartConfig.data" :options="chartConfig.options" />
 				</div>
 				<div class="wibration-plot">
-					<p>Tu będzie wykres poziomu drgań.</p>
+					<Scatter :data="chartConfig.data" :options="chartConfig.options" />
 				</div>
 			</div>
 		</div>
@@ -59,14 +58,31 @@
 </template>
 
 <script>
+import {
+	Chart as ChartJS,
+	LinearScale,
+	PointElement,
+	LineElement,
+	Tooltip,
+	Legend
+} from 'chart.js'
+import { Scatter } from 'vue-chartjs'
+import * as chartConfig from './chartConfig.js'
+
+ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend)
+
 // import {Chart} from './Chart.vue'
 export default {
 	name: 'FridgeController',
+	components: {
+		Scatter
+	},
 	// components: {
 	// 	Chart
 	// },
 	data() {
 		return {
+			chartConfig,
 			set_temperature: 0,
 			real_temperatur: undefined,
 			max_wibration_level: 50,
@@ -147,17 +163,11 @@ header {
 	width: 60%;
 }
 
-.temperature-plot {
-	display: block;
-	background: black;
-	min-height: 220px;
-	height: 100%;
-}
-
+.temperature-plot,
 .wibration-plot {
 	display: block;
-	background: black;
 	min-height: 220px;
+	max-height: 220px;
 	height: 100%;
 }
 
@@ -184,6 +194,7 @@ header {
 	overflow: auto;
 	font-size: 0.9em;
 }
+
 .messages ul {
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
 	margin: 0;
@@ -192,6 +203,7 @@ header {
 	overflow: auto;
 	list-style: none;
 }
+
 footer {
 	margin: 0;
 	padding: 0.4em 5%;
