@@ -1,14 +1,10 @@
 <template>
-	<div class="test-class" v-if="false">
-		<ul>
-			<li>blokowanie drzwi (info czy otwarte czy nie)</li>
-			<li>układ chłodzenia (temperatura zadana, chłodzenie lub nie)</li>
-			<li>układ pomiaru temperatury (wykres zmian temperatury)</li>
-			<li>układ pomiaru drgań (wykres zmian drgań)</li>
-			<li>układ odczytu karty (raportowanie kiedy karta jest wykryta i czy poprawnie)</li>
-			<li>układ GPS (wyświetlanie lokalizacji na mapie lub błędu połączenia)</li>
-		</ul>
-	</div>
+	<!-- - blokowanie drzwi (info czy otwarte czy nie)
+	- układ chłodzenia (temperatura zadana, chłodzenie lub nie)
+	- układ pomiaru temperatury (wykres zmian temperatury)
+	- układ pomiaru drgań (wykres zmian drgań)
+	- układ odczytu karty (raportowanie kiedy karta jest wykryta i czy poprawnie)
+	- układ GPS (wyświetlanie lokalizacji na mapie lub błędu połączenia) -->
 	<header>
 		<h1>SkyAid – aktywna medyczna lodówka transportowa dla dronów</h1>
 	</header>
@@ -22,8 +18,8 @@
 				</div>
 				<div class="wibration-controller">
 					<p>Dopuszczalny poziom drgań</p>
-					<input type="number" name="temperature-value" id="" min="0" max="100" step="1"
-						v-model="max_wibration_level">
+					<input type="number" name="wibration-value" id="" min="0" max="100" step="1"
+						v-model="max_wibration_level" @change="testFun()">
 				</div>
 				<div class="google-map">
 					<iframe
@@ -34,21 +30,24 @@
 			</div>
 			<div class="right-side">
 				<div class="temperature-plot">
-					<Scatter :data="chartConfig.data" :options="chartConfig.options" />
+					<!-- <TestPlot /> -->
+					<canvas ref="myPlot" id="my-plot" :key="componentKey" />
+					<!-- <Scatter id="my-plot" :data="scatterChartConfig.data" :options="scatterChartConfig.options" /> -->
+					<!-- <Line :data="lineChartConfig.data" :options="lineChartConfig.options" /> -->
 				</div>
 				<div class="wibration-plot">
-					<Scatter :data="chartConfig.data" :options="chartConfig.options" />
+					<!-- <Scatter :data="scatterChartConfig.data" :options="scatterChartConfig.options" /> -->
+					<!-- <Line :data="lineChartConfig.data" :options="lineChartConfig.options" /> -->
 				</div>
 			</div>
 		</div>
 		<div class="bot-block">
-			<div class="messages">
+			<div class="message-box">
 				<ul>
-					<li v-for:="m in messages">
-						{{ m }}
+					<li v-for:="message in messages">
+						{{ message }}
 					</li>
 				</ul>
-				<!-- <plaintext>{{ messages }}</plaintext> -->
 			</div>
 		</div>
 	</div>
@@ -58,58 +57,130 @@
 </template>
 
 <script>
+import { ref } from 'vue';
+const componentKey = ref(0);
+
+const forceRerender = () => {
+  componentKey.value += 1;
+};
+import { Scatter, Line } from 'vue-chartjs'
+import * as scatterChartConfig from './scatterChartConfig.js'
+import * as lineChartConfig from './lineChartConfig.js'
+
 import {
-	Chart as ChartJS,
+	CategoryScale,
 	LinearScale,
 	PointElement,
 	LineElement,
+	Title,
 	Tooltip,
-	Legend
+	Legend,
+	Chart,
+	ScatterController,
 } from 'chart.js'
-import { Scatter } from 'vue-chartjs'
-import * as chartConfig from './chartConfig.js'
-
-ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend)
-
-// import {Chart} from './Chart.vue'
+// Scatter
+import { Chart as ChartJS } from 'chart.js'
+// ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend)
+// Line
+ChartJS.register(
+	CategoryScale,
+	LinearScale,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	ScatterController
+)
+import TestPlot from './TestPlot.vue';
+import { render } from '@vue/runtime-dom'
 export default {
 	name: 'FridgeController',
-	components: {
-		Scatter
+	props: {
+		message: String(),
+		real_temperature: undefined,
+		wibration_level: undefined,
 	},
-	// components: {
-	// 	Chart
-	// },
+	components: {
+		Scatter,
+		Line,
+		TestPlot
+	},
 	data() {
 		return {
-			chartConfig,
+			chart: null,
 			set_temperature: 0,
-			real_temperatur: undefined,
 			max_wibration_level: 50,
-			wibration_level: undefined,
-			messages: ["Włączono urządzenie",
-				"Wyłączono urządzenie",
-				"Poprawny odczyt karty. Drzwi otwarte.",
-				"Błędny odczyt karty!",
-				"Utracono sygnał GPS!",
-				"Przywrócono sygnał GPS.",
-				"Podróż rozpoczęta.",
-				"Podróż zakończona.",
-				"Przekroczono bezpieczny poziom drgań!",
+			//temp: shallowRef([{x: 0, y: 2}]),
+			messages: Array(String()),
+			/*messages: ["Przekroczono bezpieczny poziom drgań!",
 				"Temperatura wzrosła znacznie powyżej zadanej wartości!",
 				"Temperatura spadła znacznie poniżej zadanej wartości!",
-			]
+			]*/
 		}
+	},
+	methods: {
+		testFun() {
+			let v = 0;
+			++v;
+			//this.scatterChartConfig.data.datasets[0].data.push({ x: v, y: 3 });
+			//this.chart.data.datasets[0].data.push({ x: v, y: 3 });
+			this.chart.data.datasets[0].data[0].y = 0;
+			//console.log(document.getElementById("my-plot"));
+			//console.log(this.temp);
+			//this.temp.push({x: v, y: 2});
+			console.log(this.chart.data.datasets[0].data);
+			console.log(this.chart);
+			forceRerender();
+			//render(document.getElementById("my-plot"));
+			//this.chart.reset();
+			//this.chart.resize();
+			//this.chart.update();
+			//this.chart.render();
+		}
+	},
+	watch: {
+		message(msg) {
+			this.messages = [msg].concat(this.messages);
+		},
+		real_temperature(temp) {
+			console.log("Czas: " + temp.x + ", temp: " + temp.y);
+			this.chart.data.datasets[0].data.push(temp);
+			// this.chart.data.datasets[0].data = [temp];
+			// this.chart.update();
+			// this.chart.render();
+			// aktualizacja wykresu
+		},
+		wibration_level(wibr) {
+			console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
+		}
+	},
+	mounted() {
+		const ctx = document.getElementById("my-plot");
+		this.chart = new Chart(ctx, {
+			type: 'scatter',
+			data: {
+				datasets: [
+					{
+						label: "Temperatura [st. C]",
+						fill: false,
+						borderColor: "#f87979",
+						backgroundColor: "#f87979",
+						data: [{x: 0, y: 1}]
+					},
+				],
+			},
+			options: scatterChartConfig.options
+		});
+	},
+	beforeDestroy() {
+		if (this.chart)
+			this.chart.destroy();
 	}
 }
 </script>
 
 <style>
-.test-class {
-	padding: 5% 20%;
-	text-align: left;
-}
-
 :root {
 	--primary-color: #d0d8dd;
 	--secondary-color: #00a000;
@@ -122,16 +193,16 @@ header {
 	color: var(--secondary-color);
 }
 
-.main {
+div.main {
 	display: block;
 	height: auto;
 }
 
-.top-block {
+div.top-block {
 	display: block;
 }
 
-.left-side {
+div.left-side {
 	display: inline-block;
 	vertical-align: middle;
 	margin: 0;
@@ -140,21 +211,21 @@ header {
 	height: 100%;
 }
 
-.temperature-controller {
+div.temperature-controller {
 	width: 100%;
 }
 
-.wibration-controller {
+div.wibration-controller {
 	width: 100%;
 }
 
-.google-map {
+div.google-map {
 	padding: 5px;
 	width: 100%;
 	height: 325px;
 }
 
-.right-side {
+div.right-side {
 	display: inline-block;
 	vertical-align: middle;
 	margin: 0;
@@ -163,20 +234,20 @@ header {
 	width: 60%;
 }
 
-.temperature-plot,
-.wibration-plot {
+div.temperature-plot,
+div.wibration-plot {
 	display: block;
 	min-height: 220px;
 	max-height: 220px;
 	height: 100%;
 }
 
-.bot-block {
+div.bot-block {
 	display: block;
 	padding: 1%;
 }
 
-.messages {
+div.message-box {
 	text-align: left;
 	border: 0.2em;
 	border-style: solid;
@@ -186,7 +257,7 @@ header {
 	overflow: auto;
 }
 
-.messages plaintext {
+div.message-box plaintext {
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
 	margin: 0;
 	min-height: 70px;
@@ -195,7 +266,7 @@ header {
 	font-size: 0.9em;
 }
 
-.messages ul {
+div.message-box ul {
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
 	margin: 0;
 	padding: 0;

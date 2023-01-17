@@ -8,63 +8,55 @@
 		<button @click="endFlight()">Zakończ lot</button>
 		<button @click="lostGPS()">Przerwij sygnał GPS</button>
 		<button @click="restoreGPS()">Przywróć sygnał GPS</button>
+		<button @click="startPublishing()">Zacznij mierzyć</button>
+		<button @click="stopPublishing()">Przestań mierzyć</button>
 	</div>
 </template>
 
 <script>
 
 export default {
-	name: 'FridgeController',
+	name: 'TestSimulator',
 	data() {
 		return {
 			timer: null,
-			set_temperature: 0,
 			real_temperatur: undefined,
-			max_wibration_level: 50,
 			wibration_level: undefined,
-			message: [],
+			message_rate: 1000,	// [ms]
 		}
 	},
 	methods: {
 		switchOn() {
-			let msg = "Włączono urządzenie.\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Włączono urządzenie.\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		switchOff() {
-			let msg = "Wyłączono urządzenie.\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Wyłączono urządzenie.\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		putRightCard() {
-			let msg = "Poprawny odczyt karty. Drzwi otwarte.\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Poprawny odczyt karty. Drzwi otwarte.\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		putWrongCard() {
-			let msg = "Błędny odczyt karty!\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Błędny odczyt karty!\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		startFlight() {
-			let msg = "Podróż rozpoczęta.\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Podróż rozpoczęta.\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		endFlight() {
-			let msg = "Podróż zakończona.\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Podróż zakończona.\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		lostGPS() {
-			let msg = "Utracono sygnał GPS!\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Utracono sygnał GPS!\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		restoreGPS() {
-			let msg = "Przywrócono sygnał GPS.\t" + this.getFormattedDate();
-			console.log(msg);
-			this.message.push(msg);
+			let message = "Przywrócono sygnał GPS.\t" + this.getFormattedDate();
+			this.$emit('msg', message);
 		},
 		getFormattedDate() {
 			let current_time = new Date();
@@ -94,12 +86,26 @@ export default {
 		},
 		startPublishing() {
 			// ROZPOCZECIE, nie kontynuacja nowego watku
-			this.timer = setInterval(() => {
-				let current_time = new Date();
-				let secs = Math.floor(current_time.getTime() / 1000);
-				// zapisanie temperatury i wibracji
-			}, this.message_rate)
+			const start_time = Math.floor(new Date().getTime() / 1000);
+			if (!this.timer) {
+				this.timer = setInterval(() => {
+					let current_time = new Date();
+					let secs = Math.floor(current_time.getTime() / 1000) - start_time;
+					// zapisanie temperatury i wibracji
+					this.$emit('temp', { x: secs, y: 2 });
+					this.$emit('wibr', { x: secs, y: 2 });
+				}, this.message_rate)
+			}
 		},
+		stopPublishing() {
+			if (this.timer)
+				clearInterval(this.timer);
+			this.timer = null
+		},
+	},
+	beforeDestroy() {
+		if (this.timer)
+			clearInterval(this.timer);
 	},
 }
 </script>
