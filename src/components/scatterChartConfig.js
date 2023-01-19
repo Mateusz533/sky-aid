@@ -3,8 +3,8 @@ export const data = {
 		{
 			label: "Temperatura [st. C]",
 			fill: false,
-			borderColor: "#f87979",
-			backgroundColor: "#f87979",
+			// borderColor: "#f87979",
+			// backgroundColor: "#f87979",
 			data: [
 				{
 					x: 0,
@@ -37,6 +37,7 @@ export const options = {
 	scales: {
 		x: {
 			display: true,
+			beginAtZero: true,
 			title: {
 				display: true,
 				text: "Czas [s]",
@@ -44,13 +45,31 @@ export const options = {
 		},
 		y: {
 			display: true,
+			suggestedMin: -10,
+			suggestedMax: 40,
 			title: {
 				display: true,
-				text: "Temperatura [st. C]",
+				text: "Temperatura [\u00B0C]",
 			}
 		},
 	},
-	legend: {
-	  display: false
+	plugins: {
+	  legend: {
+		display: false
+	  }
 	},
+	animation: false,
+	showLine: true,
+	elements: {
+		point: {
+			radius: 1,
+			backgroundColor: '#FF0000',
+			borderColor: '#FF0000',
+		},
+		line: {
+			tension: 0,
+			backgroundColor: '#FF0000',
+			borderColor: '#FF0000',
+		}
+	}
 };

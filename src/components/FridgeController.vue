@@ -1,10 +1,5 @@
 <template>
-	<!-- - blokowanie drzwi (info czy otwarte czy nie)
-	- układ chłodzenia (temperatura zadana, chłodzenie lub nie)
-	- układ pomiaru temperatury (wykres zmian temperatury)
-	- układ pomiaru drgań (wykres zmian drgań)
-	- układ odczytu karty (raportowanie kiedy karta jest wykryta i czy poprawnie)
-	- układ GPS (wyświetlanie lokalizacji na mapie lub błędu połączenia) -->
+	<!-- - układ chłodzenia (temperatura zadana, chłodzenie lub nie) -->
 	<header>
 		<h1>SkyAid – aktywna medyczna lodówka transportowa dla dronów</h1>
 	</header>
@@ -12,14 +7,19 @@
 		<div class="top-block">
 			<div class="left-side">
 				<div class="temperature-controller">
-					<p>Temperatura zadana</p>
+					<label>Zadana temperatura wnętrza [&#8451;]</label>
 					<input type="number" name="temperature-value" id="" min="-4" max="36" step="0.1"
-						v-model="set_temperature">
+						v-model="set_temperature" @focusout="setTemperature()">
+				</div>
+				<div class="temperature-controller">
+					<label>Maksymalna odchyłka temperatury [&#8451;]</label>
+					<input type="number" name="temperature-deviation" id="" min="0" max="10" step="0.05"
+						v-model="max_temperature_deviation">
 				</div>
 				<div class="wibration-controller">
-					<p>Dopuszczalny poziom drgań</p>
+					<label>Dopuszczalny poziom drgań [%]</label>
 					<input type="number" name="wibration-value" id="" min="0" max="100" step="1"
-						v-model="max_wibration_level" @change="testFun()">
+						v-model="max_wibration_level">
 				</div>
 				<div class="google-map">
 					<iframe
@@ -31,11 +31,12 @@
 			<div class="right-side">
 				<div class="temperature-plot">
 					<!-- <TestPlot /> -->
-					<canvas ref="myPlot" id="my-plot" :key="componentKey" />
+					<canvas id="temp-plot" />
 					<!-- <Scatter id="my-plot" :data="scatterChartConfig.data" :options="scatterChartConfig.options" /> -->
 					<!-- <Line :data="lineChartConfig.data" :options="lineChartConfig.options" /> -->
 				</div>
 				<div class="wibration-plot">
+					<canvas id="wibr-plot" />
 					<!-- <Scatter :data="scatterChartConfig.data" :options="scatterChartConfig.options" /> -->
 					<!-- <Line :data="lineChartConfig.data" :options="lineChartConfig.options" /> -->
 				</div>
@@ -45,7 +46,8 @@
 			<div class="message-box">
 				<ul>
 					<li v-for:="message in messages">
-						{{ message }}
+						<label>{{ message.msg }}</label>
+						<label>{{ message.date }}</label>
 					</li>
 				</ul>
 			</div>
@@ -57,24 +59,18 @@
 </template>
 
 <script>
-import { ref } from 'vue';
-const componentKey = ref(0);
-
-const forceRerender = () => {
-  componentKey.value += 1;
-};
 import { Scatter, Line } from 'vue-chartjs'
 import * as scatterChartConfig from './scatterChartConfig.js'
-import * as lineChartConfig from './lineChartConfig.js'
+//import * as lineChartConfig from './lineChartConfig.js'
 
 import {
-	CategoryScale,
+	//CategoryScale,
 	LinearScale,
 	PointElement,
 	LineElement,
-	Title,
+	//Title,
 	Tooltip,
-	Legend,
+	//Legend,
 	Chart,
 	ScatterController,
 } from 'chart.js'
@@ -83,99 +79,163 @@ import { Chart as ChartJS } from 'chart.js'
 // ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend)
 // Line
 ChartJS.register(
-	CategoryScale,
+	//CategoryScale,
 	LinearScale,
 	PointElement,
 	LineElement,
-	Title,
+	//Title,
 	Tooltip,
-	Legend,
+	//Legend,
 	ScatterController
 )
 import TestPlot from './TestPlot.vue';
-import { render } from '@vue/runtime-dom'
+import { shallowRef } from '@vue/runtime-dom'
 export default {
 	name: 'FridgeController',
 	props: {
-		message: String(),
-		real_temperature: undefined,
-		wibration_level: undefined,
+		message: { msg: String, date: String },
+		real_temperature: { x: Number, y: Number },
+		wibration_level: { x: Number, y: Number },
+		location: { x: Number, y: Number },
 	},
 	components: {
 		Scatter,
 		Line,
 		TestPlot
 	},
+	emits: {
+		settemperature: null,
+	},
 	data() {
 		return {
-			chart: null,
+			temp_chart: null,
+			wibr_chart: null,
 			set_temperature: 0,
+			max_temperature_deviation: 10,
 			max_wibration_level: 50,
-			//temp: shallowRef([{x: 0, y: 2}]),
-			messages: Array(String()),
-			/*messages: ["Przekroczono bezpieczny poziom drgań!",
-				"Temperatura wzrosła znacznie powyżej zadanej wartości!",
+			temp_data: shallowRef([]),
+			wibr_data: shallowRef([]),
+			messages: Array({ msg: String(), date: String() }),
+			/*messages: ["Temperatura wzrosła znacznie powyżej zadanej wartości!",
 				"Temperatura spadła znacznie poniżej zadanej wartości!",
 			]*/
 		}
 	},
 	methods: {
 		testFun() {
-			let v = 0;
-			++v;
-			//this.scatterChartConfig.data.datasets[0].data.push({ x: v, y: 3 });
-			//this.chart.data.datasets[0].data.push({ x: v, y: 3 });
-			this.chart.data.datasets[0].data[0].y = 0;
-			//console.log(document.getElementById("my-plot"));
-			//console.log(this.temp);
-			//this.temp.push({x: v, y: 2});
-			console.log(this.chart.data.datasets[0].data);
-			console.log(this.chart);
-			forceRerender();
-			//render(document.getElementById("my-plot"));
-			//this.chart.reset();
-			//this.chart.resize();
-			//this.chart.update();
-			//this.chart.render();
-		}
+			console.log("Test fun triggered.");
+		},
+		setTemperature() {
+			this.$emit('settemperature', this.set_temperature);
+		},
+		reRenderChart(chart, data) {
+			const ctx = chart.canvas;
+			const options = JSON.parse(JSON.stringify(chart.options));
+			chart.destroy();
+			chart = null;
+			return new Chart(ctx, {
+				type: 'scatter',
+				data: {
+					datasets: [
+						{
+							fill: false,
+							data: data,
+						}
+					],
+				},
+				options: options
+			});
+		},
+		getFormattedDate() {
+			let current_time = new Date();
+			let date = "";
+			let hours = current_time.getHours();
+			let minutes = current_time.getMinutes();
+			let seconds = current_time.getSeconds();
+			if (hours < 10)
+				date += "0";
+			if (hours == 1)
+				date += "0:";
+			else
+				date += hours.toString() + ":";
+			if (minutes < 10)
+				date += "0";
+			if (minutes == 1)
+				date += "0:";
+			else
+				date += minutes.toString() + ":";
+			if (seconds < 10)
+				date += "0";
+			if (seconds == 1)
+				date += "0";
+			else
+				date += seconds.toString();
+			return date;
+		},
 	},
 	watch: {
 		message(msg) {
 			this.messages = [msg].concat(this.messages);
 		},
 		real_temperature(temp) {
-			console.log("Czas: " + temp.x + ", temp: " + temp.y);
-			this.chart.data.datasets[0].data.push(temp);
-			// this.chart.data.datasets[0].data = [temp];
-			// this.chart.update();
-			// this.chart.render();
-			// aktualizacja wykresu
+			// console.log("Czas: " + temp.x + ", temp: " + temp.y);
+			this.temp_chart.data.datasets[0].data.push(temp);
+			this.temp_chart = this.reRenderChart(this.temp_chart, this.temp_data);
+			// setTimeout(() => { this.show_temp = true; }, 100);
+			if (temp.y > this.set_temperature + this.max_temperature_deviation)
+				this.messages = [{ msg: "Temperatura wzrosła znacznie powyżej zakresu tolerancji!", date: this.getFormattedDate() }].concat(this.messages);
+
+			if (temp.y < this.set_temperature - this.max_temperature_deviation)
+				this.messages = [{ msg: "Temperatura spadła znacznie poniżej zakresu tolerancji!", date: this.getFormattedDate() }].concat(this.messages);
 		},
 		wibration_level(wibr) {
-			console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
+			// console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
+			this.wibr_chart.data.datasets[0].data.push(wibr);
+			this.wibr_chart = this.reRenderChart(this.wibr_chart, this.wibr_data);
+			if (wibr.y > this.max_wibration_level)
+				this.messages = [{ msg: "Przekroczono bezpieczny poziom drgań!", date: this.getFormattedDate() }].concat(this.messages);
+		},
+		location(loc) {
+			console.log("Szerokość: " + loc.x + ", długość: " + loc.y);
 		}
 	},
 	mounted() {
-		const ctx = document.getElementById("my-plot");
-		this.chart = new Chart(ctx, {
+		const ctx_t = document.getElementById("temp-plot");
+		this.temp_chart = new Chart(ctx_t, {
 			type: 'scatter',
 			data: {
 				datasets: [
 					{
-						label: "Temperatura [st. C]",
 						fill: false,
-						borderColor: "#f87979",
-						backgroundColor: "#f87979",
-						data: [{x: 0, y: 1}]
+						data: this.temp_data
 					},
 				],
 			},
 			options: scatterChartConfig.options
 		});
+		const ctx_w = document.getElementById("wibr-plot");
+		let options = JSON.parse(JSON.stringify(scatterChartConfig.options));
+		options.scales.y.suggestedMin = 0;
+		options.scales.y.suggestedMax = 100;
+		options.scales.y.title.text = "Poziom wibracji [%]";
+		this.wibr_chart = new Chart(ctx_w, {
+			type: 'scatter',
+			data: {
+				datasets: [
+					{
+						fill: false,
+						data: this.wibr_data
+					},
+				],
+			},
+			options: options
+		});
 	},
 	beforeDestroy() {
-		if (this.chart)
-			this.chart.destroy();
+		if (this.temp_chart)
+			this.temp_chart.destroy();
+		if (this.wibr_chart)
+			this.wibr_chart.destroy();
 	}
 }
 </script>
@@ -196,10 +256,13 @@ header {
 div.main {
 	display: block;
 	height: auto;
+	width: 100%;
 }
 
 div.top-block {
 	display: block;
+	flex-wrap: wrap;
+	width: 100%;
 }
 
 div.left-side {
@@ -207,22 +270,33 @@ div.left-side {
 	vertical-align: middle;
 	margin: 0;
 	padding: 1%;
+	min-width: 400px;
+	max-width: none;
 	width: 30%;
 	height: 100%;
 }
 
-div.temperature-controller {
-	width: 100%;
+div.temperature-controller,
+div.wibration-controller {
+	padding: 5px 0px;
+	display: flex;
+	place-content: space-between;
 }
 
-div.wibration-controller {
-	width: 100%;
+div.temperature-controller input,
+div.wibration-controller input {
+	padding: 2px;
+	margin: 0 0 0 15px;
+	border-width: 2px;
+	height: 14px;
+	min-width: 50px;
+	max-width: 70px;
 }
 
 div.google-map {
-	padding: 5px;
+	padding: 15px 0px;
 	width: 100%;
-	height: 325px;
+	height: 350px;
 }
 
 div.right-side {
@@ -231,15 +305,20 @@ div.right-side {
 	margin: 0;
 	padding: 1%;
 	height: 100%;
+	min-width: 400px;
+	max-width: none;
 	width: 60%;
 }
 
 div.temperature-plot,
 div.wibration-plot {
 	display: block;
-	min-height: 220px;
-	max-height: 220px;
+	padding: 5px 0px;
+	min-height: 230px;
+	max-height: 230px;
 	height: 100%;
+	min-width: 400px;
+	max-width: none;
 }
 
 div.bot-block {
@@ -253,17 +332,9 @@ div.message-box {
 	border-style: solid;
 	border-color: black;
 	padding: 0.5em;
-	max-height: 70px;
-	overflow: auto;
-}
-
-div.message-box plaintext {
-	font-family: Verdana, Geneva, Tahoma, sans-serif;
-	margin: 0;
 	min-height: 70px;
 	max-height: 70px;
 	overflow: auto;
-	font-size: 0.9em;
 }
 
 div.message-box ul {
@@ -273,6 +344,11 @@ div.message-box ul {
 	font-size: 0.9em;
 	overflow: auto;
 	list-style: none;
+}
+
+div.message-box ul li {
+	display: flex;
+	place-content: space-between;
 }
 
 footer {
