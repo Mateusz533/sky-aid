@@ -1,17 +1,24 @@
 <template>
-	<div class="test-box">
-		<button @click="switchOn()">Włącz urządzenie</button>
-		<button @click="switchOff()">Wyłącz urządzenie</button>
-		<button @click="putRightCard()">Przyłóż właściwą kartę</button>
-		<button @click="putWrongCard()">Przyłóż niewłaściwą kartę</button>
-		<button @click="startFlight()">Rozpocznij lot</button>
-		<button @click="endFlight()">Zakończ lot</button>
-		<button @click="lostGPS()">Przerwij sygnał GPS</button>
-		<button @click="restoreGPS()">Przywróć sygnał GPS</button>
+	<div class="button-box">
+		<button @click="$emit('msg', { msg: 'Włączono urządzenie.', date: getFormattedDate() })">Włącz
+			urządzenie</button>
+		<button @click="$emit('msg', { msg: 'Włączono urządzenie.', date: getFormattedDate() })">Wyłącz
+			urządzenie</button>
+		<button
+			@click="$emit('msg', { msg: 'Poprawny odczyt karty. Drzwi otwarte.', date: getFormattedDate() })">Przyłóż
+			właściwą kartę</button>
+		<button @click="$emit('msg', { msg: 'Błędny odczyt karty!', date: getFormattedDate() })">Przyłóż niewłaściwą
+			kartę</button>
+		<button @click="$emit('msg', { msg: 'Podróż rozpoczęta.', date: getFormattedDate() })">Rozpocznij lot</button>
+		<button @click="$emit('msg', { msg: 'Podróż zakończona.', date: getFormattedDate() })">Zakończ lot</button>
+		<button @click="$emit('msg', { msg: 'Utracono sygnał GPS!', date: getFormattedDate() })">Przerwij sygnał
+			GPS</button>
+		<button @click="$emit('msg', { msg: 'Przywrócono sygnał GPS.', date: getFormattedDate() })">Przywróć sygnał
+			GPS</button>
 		<button @click="startPublishing()">Zacznij mierzyć</button>
 		<button @click="stopPublishing()">Przestań mierzyć</button>
 	</div>
-	<div class="test-box">
+	<div class="settings-box">
 		<ul>
 			<li>
 				<label>Temperatura</label>
@@ -124,18 +131,10 @@ export default {
 		startPublishing() {
 			// ROZPOCZECIE, nie kontynuacja nowego watku
 			const start_time = Math.floor(new Date().getTime() / 1000);
+			this.sendMessages(start_time);
 			if (!this.timer) {
 				this.timer = setInterval(() => {
-					let current_time = new Date();
-					let secs = Math.floor(current_time.getTime() / 1000) - start_time;
-					let rand_cos_dist = Math.asin(2 * Math.random() - 1) * 2 / Math.PI;
-					let temp = parseFloat(this.real_temperature) + parseFloat(this.temperature_oscillations_amplitude) * rand_cos_dist;
-					rand_cos_dist = Math.asin(2 * Math.random() - 1) * 2 / Math.PI;
-					let wibr = parseFloat(this.wibration_level) + parseFloat(this.wibration_level_oscillations_amplitude) * rand_cos_dist;
-					// zapisanie temperatury i wibracji
-					this.$emit('temperature', { x: secs, y: temp });
-					this.$emit('wibration', { x: secs, y: wibr });
-					this.$emit('location', { x: 50.000001, y: 20.000001 });
+					this.sendMessages(start_time);
 				}, this.message_rate)
 			}
 		},
@@ -143,6 +142,18 @@ export default {
 			if (this.timer)
 				clearInterval(this.timer);
 			this.timer = null
+		},
+		sendMessages(start_time) {
+			let current_time = new Date();
+			let secs = Math.floor(current_time.getTime() / 1000) - start_time;
+			let rand_cos_dist = Math.asin(2 * Math.random() - 1) * 2 / Math.PI;
+			let temp = parseFloat(this.real_temperature) + parseFloat(this.temperature_oscillations_amplitude) * rand_cos_dist;
+			rand_cos_dist = Math.asin(2 * Math.random() - 1) * 2 / Math.PI;
+			let wibr = parseFloat(this.wibration_level) + parseFloat(this.wibration_level_oscillations_amplitude) * rand_cos_dist;
+			// zapisanie temperatury i wibracji
+			this.$emit('temperature', { x: secs, y: temp });
+			this.$emit('wibration', { x: secs, y: wibr });
+			this.$emit('location', { x: 50.000001, y: 20.000001 });
 		},
 	},
 	beforeDestroy() {
@@ -155,34 +166,45 @@ export default {
 </script>
 
 <style>
-div.test-box {
+div.button-box {
 	padding: 1em;
 	display: flex;
 	place-content: space-between;
 	flex-wrap: wrap;
 }
 
-div.test-box button {
+div.button-box button {
 	padding: 1em;
 	width: 180px;
 	cursor: pointer;
 }
 
-div.test-box ul {
+div.settings-box {
+	padding: 1em;
+	display: flex;
+	justify-content: space-evenly;
+}
+
+div.settings-box ul {
 	list-style: none;
 	display: flex;
 	flex-flow: column;
 }
 
-div.test-box ul li {
-	height: 3em;
+div.settings-box ul li {
+	min-height: 3em;
+	max-height: 6em;
 	padding: 0.5em;
 	display: flex;
 	place-content: space-between;
-	text-align: left;
 }
 
-div.test-box ul li input {
+div.settings-box ul li label {
+	padding: 15px 0;
+}
+
+div.settings-box ul li input {
 	margin-left: 30px;
+	cursor: pointer;
 }
 </style>

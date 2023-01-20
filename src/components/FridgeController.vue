@@ -138,7 +138,6 @@ export default {
 				data: {
 					datasets: [
 						{
-							fill: false,
 							data: data,
 						}
 					],
@@ -201,20 +200,23 @@ export default {
 	},
 	mounted() {
 		const ctx_t = document.getElementById("temp-plot");
+		let options = JSON.parse(JSON.stringify(scatterChartConfig.options));
+		options.scales.y.suggestedMin = -10;
+		options.scales.y.suggestedMax = 40;
+		options.scales.y.title.text = "Temperatura [\u00B0C]";
 		this.temp_chart = new Chart(ctx_t, {
 			type: 'scatter',
 			data: {
 				datasets: [
 					{
-						fill: false,
 						data: this.temp_data
 					},
 				],
 			},
-			options: scatterChartConfig.options
+			options: options
 		});
 		const ctx_w = document.getElementById("wibr-plot");
-		let options = JSON.parse(JSON.stringify(scatterChartConfig.options));
+		options = JSON.parse(JSON.stringify(scatterChartConfig.options));
 		options.scales.y.suggestedMin = 0;
 		options.scales.y.suggestedMax = 100;
 		options.scales.y.title.text = "Poziom wibracji [%]";
@@ -223,7 +225,6 @@ export default {
 			data: {
 				datasets: [
 					{
-						fill: false,
 						data: this.wibr_data
 					},
 				],
@@ -260,20 +261,24 @@ div.main {
 }
 
 div.top-block {
-	display: block;
+	margin-inline: 2%;
+	display: flex;
 	flex-wrap: wrap;
-	width: 100%;
+	/* align-items: stretch; */
+	justify-content: space-evenly;
+	width: auto;
 }
 
 div.left-side {
 	display: inline-block;
 	vertical-align: middle;
 	margin: 0;
-	padding: 1%;
+	padding: 1% 2%;
 	min-width: 400px;
-	max-width: none;
-	width: 30%;
+	max-width: 500px;
+	/* width: 30%; */
 	height: 100%;
+	flex-grow: 1;
 }
 
 div.temperature-controller,
@@ -301,18 +306,23 @@ div.google-map {
 
 div.right-side {
 	display: inline-block;
+	flex-flow: column;
 	vertical-align: middle;
+	/* justify-content: space-around; */
+	/* align-items: stretch; */
 	margin: 0;
-	padding: 1%;
+	padding: 1% 2%;
 	height: 100%;
 	min-width: 400px;
-	max-width: none;
-	width: 60%;
+	max-width: 90%;
+	width: 55%;
+	flex-grow: 1;
 }
 
 div.temperature-plot,
 div.wibration-plot {
-	display: block;
+	/* display: block; */
+	/* flex-grow: 10; */
 	padding: 5px 0px;
 	min-height: 230px;
 	max-height: 230px;

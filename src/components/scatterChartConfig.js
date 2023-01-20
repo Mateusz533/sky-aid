@@ -1,35 +1,18 @@
-export const data = {
-	datasets: [
-		{
-			label: "Temperatura [st. C]",
-			fill: false,
-			// borderColor: "#f87979",
-			// backgroundColor: "#f87979",
-			data: [
-				{
-					x: 0,
-					y: 4,
-				},
-				{
-					x: 1,
-					y: 1,
-				},
-				{
-					x: 2,
-					y: 0,
-				},
-				{
-					x: 3,
-					y: 1,
-				},
-				{
-					x: 4,
-					y: 4,
-				},
-			],
-		},
-	],
-};
+// export const data = {
+// 	datasets: [
+// 		{
+// 			fill: false,
+// 			// borderColor: "#f87979",
+// 			// backgroundColor: "#f87979",
+// 			data: [
+// 				{
+// 					x: 0,
+// 					y: 0,
+// 				},
+// 			],
+// 		},
+// 	],
+// };
 
 export const options = {
 	responsive: true,
@@ -45,11 +28,11 @@ export const options = {
 		},
 		y: {
 			display: true,
-			suggestedMin: -10,
-			suggestedMax: 40,
+			// suggestedMin: -10,
+			// suggestedMax: 40,
 			title: {
 				display: true,
-				text: "Temperatura [\u00B0C]",
+				// text: "Temperatura [\u00B0C]",
 			}
 		},
 	},
