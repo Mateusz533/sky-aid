@@ -111,10 +111,10 @@ export default {
 			temp_chart: null,
 			wibr_chart: null,
 			set_temperature: 0,
-			max_temperature_deviation: 10,
+			max_temperature_deviation: 0,
 			max_wibration_level: 50,
-			temp_data: shallowRef([]),
-			wibr_data: shallowRef([]),
+			temp_data: shallowRef({ datasets: Array({ data: [] }) }),
+			wibr_data: shallowRef({ datasets: Array({ data: [] }) }),
 			messages: Array({ msg: String(), date: String() }),
 			/*messages: ["Temperatura wzrosła znacznie powyżej zadanej wartości!",
 				"Temperatura spadła znacznie poniżej zadanej wartości!",
@@ -135,13 +135,7 @@ export default {
 			chart = null;
 			return new Chart(ctx, {
 				type: 'scatter',
-				data: {
-					datasets: [
-						{
-							data: data,
-						}
-					],
-				},
+				data: data,
 				options: options
 			});
 		},
@@ -179,17 +173,30 @@ export default {
 		real_temperature(temp) {
 			// console.log("Czas: " + temp.x + ", temp: " + temp.y);
 			this.temp_chart.data.datasets[0].data.push(temp);
+			this.temp_chart.data.datasets[1].data = [{
+				x: 0, y: this.set_temperature - this.max_temperature_deviation
+			},
+			{
+				x: temp.x, y: this.set_temperature - this.max_temperature_deviation
+			}];
+			this.temp_chart.data.datasets[2].data = [{
+				x: 0, y: this.set_temperature + this.max_temperature_deviation
+			},
+			{
+				x: temp.x, y: this.set_temperature + this.max_temperature_deviation
+			}];
 			this.temp_chart = this.reRenderChart(this.temp_chart, this.temp_data);
 			// setTimeout(() => { this.show_temp = true; }, 100);
-			if (temp.y > this.set_temperature + this.max_temperature_deviation)
+			if (this.max_temperature_deviation > 0 && temp.y > this.set_temperature + this.max_temperature_deviation)
 				this.messages = [{ msg: "Temperatura wzrosła znacznie powyżej zakresu tolerancji!", date: this.getFormattedDate() }].concat(this.messages);
 
-			if (temp.y < this.set_temperature - this.max_temperature_deviation)
+			if (this.max_temperature_deviation > 0 && temp.y < this.set_temperature - this.max_temperature_deviation)
 				this.messages = [{ msg: "Temperatura spadła znacznie poniżej zakresu tolerancji!", date: this.getFormattedDate() }].concat(this.messages);
 		},
 		wibration_level(wibr) {
 			// console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
 			this.wibr_chart.data.datasets[0].data.push(wibr);
+			this.wibr_chart.data.datasets[1].data = [{ x: 0, y: this.max_wibration_level }, { x: wibr.x, y: this.max_wibration_level }];
 			this.wibr_chart = this.reRenderChart(this.wibr_chart, this.wibr_data);
 			if (wibr.y > this.max_wibration_level)
 				this.messages = [{ msg: "Przekroczono bezpieczny poziom drgań!", date: this.getFormattedDate() }].concat(this.messages);
@@ -206,13 +213,7 @@ export default {
 		options.scales.y.title.text = "Temperatura [\u00B0C]";
 		this.temp_chart = new Chart(ctx_t, {
 			type: 'scatter',
-			data: {
-				datasets: [
-					{
-						data: this.temp_data
-					},
-				],
-			},
+			data: this.temp_data,
 			options: options
 		});
 		const ctx_w = document.getElementById("wibr-plot");
@@ -222,15 +223,24 @@ export default {
 		options.scales.y.title.text = "Poziom wibracji [%]";
 		this.wibr_chart = new Chart(ctx_w, {
 			type: 'scatter',
-			data: {
-				datasets: [
-					{
-						data: this.wibr_data
-					},
-				],
-			},
+			data: this.wibr_data,
 			options: options
 		});
+		let dataset = {
+			elements: {
+				line: {
+					borderWidth: 0.5,
+					borderDash: [10, 10],
+				},
+				point: {
+					radius: 0,
+				}
+			},
+			data: Array(Number),
+		};
+		this.temp_data.datasets.push(dataset);
+		this.temp_data.datasets.push(JSON.parse(JSON.stringify(dataset)));
+		this.wibr_data.datasets.push(JSON.parse(JSON.stringify(dataset)));
 	},
 	beforeDestroy() {
 		if (this.temp_chart)

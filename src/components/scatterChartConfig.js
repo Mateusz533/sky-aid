@@ -54,5 +54,5 @@ export const options = {
 			backgroundColor: '#FF0000',
 			borderColor: '#FF0000',
 		}
-	}
+	},
 };
