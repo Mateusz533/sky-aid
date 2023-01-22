@@ -1,19 +1,15 @@
-// export const data = {
-// 	datasets: [
-// 		{
-// 			fill: false,
-// 			// borderColor: "#f87979",
-// 			// backgroundColor: "#f87979",
-// 			data: [
-// 				{
-// 					x: 0,
-// 					y: 0,
-// 				},
-// 			],
-// 		},
-// 	],
-// };
-
+export const dataset = {
+	elements: {
+		line: {
+			borderWidth: 0.5,
+			borderDash: [10, 10],
+		},
+		point: {
+			radius: 0,
+		}
+	},
+	data: Array(Number),
+};
 export const options = {
 	responsive: true,
 	maintainAspectRatio: false,
@@ -28,11 +24,8 @@ export const options = {
 		},
 		y: {
 			display: true,
-			// suggestedMin: -10,
-			// suggestedMax: 40,
 			title: {
 				display: true,
-				// text: "Temperatura [\u00B0C]",
 			}
 		},
 	},

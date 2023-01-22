@@ -2,19 +2,14 @@
 	<div class="button-box">
 		<button @click="switchOn()">Włącz urządzenie</button>
 		<button @click="switchOff()">Wyłącz urządzenie</button>
-		<button
-			@click="$emit('msg', { msg: 'Poprawny odczyt karty. Drzwi otwarte.', date: getFormattedDate() })">Przyłóż
-			właściwą kartę</button>
-		<button @click="$emit('msg', { msg: 'Błędny odczyt karty!', date: getFormattedDate() })">Przyłóż niewłaściwą
-			kartę</button>
+		<button @click="putRightCard()">Przyłóż właściwą kartę</button>
+		<button @click="putWrongCard()">Przyłóż niewłaściwą kartę</button>
 		<button @click="startFlight()">Rozpocznij lot</button>
 		<button @click="stopFlight()">Zakończ lot</button>
-		<button @click="$emit('msg', { msg: 'Utracono sygnał GPS!', date: getFormattedDate() })">Przerwij sygnał
-			GPS</button>
-		<button @click="$emit('msg', { msg: 'Przywrócono sygnał GPS.', date: getFormattedDate() })">Przywróć sygnał
-			GPS</button>
-		<button @click="startPublishing()">Zacznij mierzyć</button>
-		<button @click="stopPublishing()">Przestań mierzyć</button>
+		<button @click="loseSignalGPS()">Przerwij sygnał GPS</button>
+		<button @click="restoreSignalGPS()">Przywróć sygnał GPS</button>
+		<button @click="startPublishing()">Rozpocznij transmsję</button>
+		<button @click="stopPublishing()">Zakończ transmisję</button>
 	</div>
 	<div class="settings-box">
 		<ul>
@@ -68,6 +63,7 @@ export default {
 	data() {
 		return {
 			is_switched_on: false,
+			is_signal_GPS: true,
 			timer: null,
 			regulator: null,
 			flight: null,
@@ -75,7 +71,7 @@ export default {
 			target_longitude: 19,
 			latitude: 52,
 			longitude: 19,
-			real_temperature: 0,
+			real_temperature: 20,
 			wibration_level: 0,
 			temperature_oscillations_amplitude: 0,
 			wibration_level_oscillations_amplitude: 0,
@@ -106,6 +102,7 @@ export default {
 			if (!this.is_switched_on)
 				return;
 			this.$emit('msg', { msg: 'Wyłączono urządzenie.', date: this.getFormattedDate() });
+			this.$emit('location', { x: NaN, y: NaN });
 			this.is_switched_on = false;
 			if (this.timer)
 				clearInterval(this.timer);
@@ -116,6 +113,28 @@ export default {
 			if (this.flight)
 				clearInterval(this.flight);
 			this.flight = null;
+		},
+		putRightCard() {
+			if (!this.is_switched_on)
+				return;
+			this.$emit('msg', { msg: 'Poprawny odczyt karty. Drzwi otwarte.', date: this.getFormattedDate() });
+		},
+		putWrongCard() {
+			if (!this.is_switched_on)
+				return;
+			this.$emit('msg', { msg: 'Błędny odczyt karty!', date: this.getFormattedDate() });
+		},
+		loseSignalGPS() {
+			if (!this.is_switched_on)
+				return;
+			this.$emit('msg', { msg: 'Utracono sygnał GPS!', date: this.getFormattedDate() });
+			this.is_signal_GPS = false;
+		},
+		restoreSignalGPS() {
+			if (!this.is_switched_on)
+				return;
+			this.$emit('msg', { msg: 'Przywrócono sygnał GPS.', date: this.getFormattedDate() });
+			this.is_signal_GPS = true;
 		},
 		startFlight() {
 			if (!this.is_switched_on)
@@ -184,9 +203,11 @@ export default {
 			}
 		},
 		stopPublishing() {
-			if (this.timer)
+			if (this.timer) {
 				clearInterval(this.timer);
-			this.timer = null;
+				this.timer = null;
+				this.$emit('location', { x: NaN, y: NaN });
+			}
 		},
 		sendMessages(start_time) {
 			let current_time = new Date();
@@ -198,7 +219,10 @@ export default {
 			// zapisanie temperatury i wibracji
 			this.$emit('temperature', { x: secs, y: temp });
 			this.$emit('wibration', { x: secs, y: wibr });
-			this.$emit('location', { x: this.longitude, y: this.latitude });
+			if (this.is_signal_GPS)
+				this.$emit('location', { x: this.longitude, y: this.latitude });
+			else
+				this.$emit('location', { x: NaN, y: NaN });
 		},
 	},
 	beforeDestroy() {
@@ -213,57 +237,5 @@ export default {
 </script>
 
 <style>
-div.button-box {
-	padding: 1em;
-	display: flex;
-	place-content: space-between;
-	flex-wrap: wrap;
-}
-
-div.button-box button {
-	padding: 1em;
-	width: 180px;
-	cursor: pointer;
-}
-
-div.settings-box {
-	padding: 1em;
-	display: flex;
-	justify-content: space-evenly;
-}
-
-div.settings-box ul {
-	list-style: none;
-	display: flex;
-	flex-flow: column;
-}
-
-div.settings-box ul li {
-	min-height: 3em;
-	max-height: 6em;
-	padding: 0.5em;
-	display: flex;
-	place-content: space-between;
-}
-
-div.settings-box ul li.bot {
-	min-height: 1em;
-	max-height: 6em;
-	padding: 0.2em;
-	display: flex;
-	place-content: space-between;
-}
-
-div.settings-box ul li label {
-	padding: 15px 0;
-}
-
-div.settings-box ul li.bot label {
-	padding: 0;
-}
-
-div.settings-box ul li input {
-	margin-left: 30px;
-	cursor: pointer;
-}
+/* All styles included in file './assets/global.css' */
 </style>

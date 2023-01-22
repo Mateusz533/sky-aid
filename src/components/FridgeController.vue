@@ -55,6 +55,7 @@
 
 <script>
 import * as scatterChartConfig from './scatterChartConfig.js'
+import * as mapChartConfig from './mapConfig.js'
 import { shallowRef } from '@vue/runtime-dom'
 import {
 	Chart,
@@ -147,19 +148,26 @@ export default {
 		},
 		real_temperature(temp) {
 			// console.log("Czas: " + temp.x + ", temp: " + temp.y);
-			this.temp_chart.data.datasets[0].data.push(temp);
-			this.temp_chart.data.datasets[1].data = [{
-				x: 0, y: this.set_temperature - this.max_temperature_deviation
-			},
-			{
-				x: temp.x, y: this.set_temperature - this.max_temperature_deviation
-			}];
-			this.temp_chart.data.datasets[2].data = [{
-				x: 0, y: this.set_temperature + this.max_temperature_deviation
-			},
-			{
-				x: temp.x, y: this.set_temperature + this.max_temperature_deviation
-			}];
+			if (temp.x < 1) {
+				this.temp_chart.data.datasets[0].data = [temp];
+				this.temp_chart.data.datasets[1].data = [{ x: 0, y: this.set_temperature - this.max_temperature_deviation }];
+				this.temp_chart.data.datasets[2].data = [{ x: 0, y: this.set_temperature + this.max_temperature_deviation }];
+			}
+			else {
+				this.temp_chart.data.datasets[0].data.push(temp);
+				this.temp_chart.data.datasets[1].data = [{
+					x: 0, y: this.set_temperature - this.max_temperature_deviation
+				},
+				{
+					x: temp.x, y: this.set_temperature - this.max_temperature_deviation
+				}];
+				this.temp_chart.data.datasets[2].data = [{
+					x: 0, y: this.set_temperature + this.max_temperature_deviation
+				},
+				{
+					x: temp.x, y: this.set_temperature + this.max_temperature_deviation
+				}];
+			}
 			this.temp_chart = this.reRenderChart(this.temp_chart, this.temp_data);
 
 			if (this.max_temperature_deviation > 0 && temp.y > this.set_temperature + this.max_temperature_deviation)
@@ -170,17 +178,29 @@ export default {
 		},
 		wibration_level(wibr) {
 			// console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
-			this.wibr_chart.data.datasets[0].data.push(wibr);
-			this.wibr_chart.data.datasets[1].data = [{ x: 0, y: this.max_wibration_level }, { x: wibr.x, y: this.max_wibration_level }];
+			if (wibr.x < 1) {
+				this.wibr_chart.data.datasets[0].data = [wibr];
+				this.wibr_chart.data.datasets[1].data = [{ x: 0, y: this.max_wibration_level }];
+			}
+			else {
+				this.wibr_chart.data.datasets[0].data.push(wibr);
+				this.wibr_chart.data.datasets[1].data = [{ x: 0, y: this.max_wibration_level }, { x: wibr.x, y: this.max_wibration_level }];
+			}
 			this.wibr_chart = this.reRenderChart(this.wibr_chart, this.wibr_data);
 			if (wibr.y > this.max_wibration_level)
 				this.messages = [{ msg: "Przekroczono bezpieczny poziom drgań!", date: this.getFormattedDate() }].concat(this.messages);
 		},
 		location(loc) {
 			// console.log("Szerokość: " + loc.y + ", długość: " + loc.x);
-			this.map_chart.data.datasets[0].data = [loc];
-			this.map_chart.data.datasets[1].data[1] = loc;
-			this.map_chart.data.datasets[2].data[1] = loc;
+			if (isNaN(loc.x) || isNaN(loc.y)) {
+				this.map_chart.data.datasets[0].elements.point.backgroundColor = '#777777';
+			}
+			else {
+				this.map_chart.data.datasets[0].data = [loc];
+				this.map_chart.data.datasets[1].data[1] = loc;
+				this.map_chart.data.datasets[2].data[1] = loc;
+				this.map_chart.data.datasets[0].elements.point.backgroundColor = '#0000FF';
+			}
 			this.map_chart = this.reRenderChart(this.map_chart, this.map_data);
 		},
 		target_location(target_loc) {
@@ -233,167 +253,17 @@ export default {
 			options: options
 		});
 
-		let dataset = {
-			elements: {
-				line: {
-					borderWidth: 0.5,
-					borderDash: [10, 10],
-				},
-				point: {
-					radius: 0,
-				}
-			},
-			data: Array(Number),
-		};
-		this.temp_data.datasets.push(dataset);
-		this.temp_data.datasets.push(JSON.parse(JSON.stringify(dataset)));
-		this.wibr_data.datasets.push(JSON.parse(JSON.stringify(dataset)));
-
+		this.temp_data.datasets.push(JSON.parse(JSON.stringify(scatterChartConfig.dataset)));
+		this.temp_data.datasets.push(JSON.parse(JSON.stringify(scatterChartConfig.dataset)));
+		this.wibr_data.datasets.push(JSON.parse(JSON.stringify(scatterChartConfig.dataset)));
+		
 		const ctx_m = document.getElementById("flight-map");
-		this.map_data = {
-			datasets: [
-				{
-					data: [
-						{
-							x: 19,
-							y: 52,
-						},
-					],
-					elements: {
-						point: {
-							radius: 10,
-							borderWidth: 2,
-						},
-						line: {
-							display: false,
-						}
-					},
-				},
-				{
-					data: [
-						{
-							x: 19,
-							y: 52,
-						},
-						{
-							x: 19,
-							y: 52,
-						}
-					],
-				},
-				{
-					data: [
-						{
-							x: 19,
-							y: 52,
-						},
-						{
-							x: 19,
-							y: 52,
-						}
-					],
-					elements: {
-						line: {
-							backgroundColor: '#777777',
-							borderColor: '#777777',
-						},
-						point: {
-							backgroundColor: '#777777',
-						}
-					},
-				},
-			],
-		};
+		options = JSON.parse(JSON.stringify(mapChartConfig.options));
+		this.map_data = JSON.parse(JSON.stringify(mapChartConfig.data));
 		this.map_chart = new Chart(ctx_m, {
 			type: 'scatter',
 			data: this.map_data,
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				layout: {
-					padding: 5
-				},
-				scales: {
-					x: {
-						display: true,
-						suggestedMin: 18.99,
-						suggestedMax: 19.01,
-						border: {
-							width: 0,
-						},
-						ticks: {
-							stepSize: 0.01,
-						},
-						grid: {
-							// tickLength: 5,
-							tickWidth: 1,
-							lineWidth: 0,
-						},
-					},
-					xAxes: {
-						display: true,
-						suggestedMin: 18.99,
-						suggestedMax: 19.01,
-						position: 'top',
-						border: {
-							width: 0,
-						},
-						ticks: {
-							stepSize: 0.01,
-						},
-					},
-					y: {
-						display: true,
-						suggestedMin: 51.99,
-						suggestedMax: 52.01,
-						border: {
-							width: 0,
-						},
-						ticks: {
-							stepSize: 0.01,
-						},
-						grid: {
-							// tickLength: 5,
-							tickWidth: 1,
-							lineWidth: 0,
-						},
-					},
-					yAxes: {
-						display: true,
-						suggestedMin: 51.99,
-						suggestedMax: 52.01,
-						position: 'right',
-						border: {
-							width: 0,
-						},
-						ticks: {
-							stepSize: 0.01,
-						},
-					},
-				},
-				plugins: {
-					legend: {
-						display: false
-					}
-				},
-				animation: false,
-				showLine: true,
-				elements: {
-					line: {
-						tension: 0,
-						borderWidth: 3,
-						borderDash: [10, 10],
-						backgroundColor: '#0000FF',
-						borderColor: '#0000FF',
-					},
-					point: {
-						radius: 5,
-						backgroundColor: '#0000FF',
-						borderColor: '#FFFFFF',
-						borderWidth: 0,
-					}
-				},
-			}
+			options: options
 		});
 	},
 	beforeDestroy() {
@@ -406,130 +276,5 @@ export default {
 </script>
 
 <style>
-:root {
-	--primary-color: #d0d8dd;
-	--secondary-color: #00a000;
-}
-
-header {
-	margin: 0;
-	padding: 1% 5%;
-	background-color: var(--primary-color);
-	color: var(--secondary-color);
-}
-
-div.main {
-	display: block;
-	height: auto;
-	width: 100%;
-}
-
-div.top-block {
-	margin-inline: 2%;
-	display: flex;
-	flex-wrap: wrap;
-	/* align-items: stretch; */
-	justify-content: space-evenly;
-	width: auto;
-}
-
-div.left-side {
-	display: inline-block;
-	vertical-align: middle;
-	margin: 0;
-	padding: 1% 2%;
-	min-width: 400px;
-	max-width: 500px;
-	width: 30%;
-	height: 100%;
-	flex-grow: 1;
-}
-
-div.temperature-controller,
-div.wibration-controller {
-	padding: 5px 0px;
-	display: flex;
-	place-content: space-between;
-}
-
-div.temperature-controller input,
-div.wibration-controller input {
-	padding: 2px;
-	margin: 0 0 0 15px;
-	border-width: 2px;
-	height: 14px;
-	min-width: 50px;
-	max-width: 70px;
-}
-
-div.google-map {
-	padding: 15px 0px;
-	width: 100%;
-	height: 350px;
-}
-
-div.right-side {
-	display: inline-block;
-	flex-flow: column;
-	vertical-align: middle;
-	/* justify-content: space-around; */
-	/* align-items: stretch; */
-	margin: 0;
-	padding: 1% 2%;
-	height: 100%;
-	min-width: 400px;
-	max-width: 90%;
-	width: 50%;
-	flex-grow: 1;
-}
-
-div.temperature-plot,
-div.wibration-plot {
-	/* display: block; */
-	/* flex-grow: 10; */
-	padding: 5px 0px;
-	min-height: 230px;
-	max-height: 230px;
-	height: 100%;
-	min-width: 400px;
-	max-width: none;
-}
-
-div.bot-block {
-	display: block;
-	padding: 1%;
-}
-
-div.message-box {
-	text-align: left;
-	border: 0.2em;
-	border-style: solid;
-	border-color: black;
-	padding: 0.5em;
-	min-height: 70px;
-	max-height: 70px;
-	overflow: auto;
-}
-
-div.message-box ul {
-	font-family: Verdana, Geneva, Tahoma, sans-serif;
-	margin: 0;
-	padding: 0;
-	font-size: 0.9em;
-	overflow: auto;
-	list-style: none;
-}
-
-div.message-box ul li {
-	display: flex;
-	place-content: space-between;
-}
-
-footer {
-	margin: 0;
-	padding: 0.4em 5%;
-	background-color: var(--primary-color);
-	color: var(--secondary-color);
-	text-align: right;
-}
+/* All styles included in file './assets/global.css' */
 </style>
