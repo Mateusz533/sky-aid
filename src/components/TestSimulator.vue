@@ -1,16 +1,14 @@
 <template>
 	<div class="button-box">
-		<button @click="$emit('msg', { msg: 'Włączono urządzenie.', date: getFormattedDate() })">Włącz
-			urządzenie</button>
-		<button @click="$emit('msg', { msg: 'Włączono urządzenie.', date: getFormattedDate() })">Wyłącz
-			urządzenie</button>
+		<button @click="switchOn()">Włącz urządzenie</button>
+		<button @click="switchOff()">Wyłącz urządzenie</button>
 		<button
 			@click="$emit('msg', { msg: 'Poprawny odczyt karty. Drzwi otwarte.', date: getFormattedDate() })">Przyłóż
 			właściwą kartę</button>
 		<button @click="$emit('msg', { msg: 'Błędny odczyt karty!', date: getFormattedDate() })">Przyłóż niewłaściwą
 			kartę</button>
-		<button @click="$emit('msg', { msg: 'Podróż rozpoczęta.', date: getFormattedDate() })">Rozpocznij lot</button>
-		<button @click="$emit('msg', { msg: 'Podróż zakończona.', date: getFormattedDate() })">Zakończ lot</button>
+		<button @click="startFlight()">Rozpocznij lot</button>
+		<button @click="stopFlight()">Zakończ lot</button>
 		<button @click="$emit('msg', { msg: 'Utracono sygnał GPS!', date: getFormattedDate() })">Przerwij sygnał
 			GPS</button>
 		<button @click="$emit('msg', { msg: 'Przywrócono sygnał GPS.', date: getFormattedDate() })">Przywróć sygnał
@@ -39,6 +37,18 @@
 			</li>
 		</ul>
 	</div>
+	<div class="settings-box">
+		<ul>
+			<li class="bot">
+				<label>Szerokość</label>
+				<input type="number" min="49" max="55" step="0.00001" v-model="this.target_latitude">
+			</li>
+			<li class="bot">
+				<label>Długość</label>
+				<input type="number" min="14" max="24" step="0.00001" v-model="this.target_longitude">
+			</li>
+		</ul>
+	</div>
 </template>
 
 <script>
@@ -53,54 +63,88 @@ export default {
 		temperature: null,
 		wibration: null,
 		location: null,
+		target_loc: null,
 	},
 	data() {
 		return {
+			is_switched_on: false,
 			timer: null,
 			regulator: null,
+			flight: null,
+			target_latitude: 52,
+			target_longitude: 19,
+			latitude: 52,
+			longitude: 19,
 			real_temperature: 0,
 			wibration_level: 0,
 			temperature_oscillations_amplitude: 0,
 			wibration_level_oscillations_amplitude: 0,
 			message_rate: 1000,	// [ms]
 			regulation_time: 10000,
+			flight_time: 60 	// [message_rate]
 		}
 	},
 	watch: {
 		set_temperature(temp) {
+			if (!this.is_switched_on)
+				return;
 			if (this.regulator)
 				clearInterval(this.regulator);
 			this.regulator = setInterval(() => {
 				this.real_temperature = parseFloat(this.real_temperature);
-				this.real_temperature += this.message_rate / this.regulation_time * (parseFloat(this.set_temperature) - this.real_temperature);
+				this.real_temperature += this.message_rate / this.regulation_time * (parseFloat(temp) - this.real_temperature);
 			}, this.message_rate)
-			console.log("Temperature set to: " + temp);
+			// console.log("Temperature set to: " + temp);
 		}
 	},
 	methods: {
 		switchOn() {
-			this.$emit('msg', { msg: "Włączono urządzenie.", date: this.getFormattedDate() });
+			this.$emit('msg', { msg: 'Włączono urządzenie.', date: this.getFormattedDate() });
+			this.is_switched_on = true;
 		},
 		switchOff() {
-			this.$emit('msg', { msg: "Wyłączono urządzenie.", date: this.getFormattedDate() });
-		},
-		putRightCard() {
-			this.$emit('msg', { msg: "Poprawny odczyt karty. Drzwi otwarte.", date: this.getFormattedDate() });
-		},
-		putWrongCard() {
-			this.$emit('msg', { msg: "Błędny odczyt karty!", date: this.getFormattedDate() });
+			if (!this.is_switched_on)
+				return;
+			this.$emit('msg', { msg: 'Wyłączono urządzenie.', date: this.getFormattedDate() });
+			this.is_switched_on = false;
+			if (this.timer)
+				clearInterval(this.timer);
+			this.timer = null;
+			if (this.regulator)
+				clearInterval(this.regulator);
+			this.regulator = null;
+			if (this.flight)
+				clearInterval(this.flight);
+			this.flight = null;
 		},
 		startFlight() {
-			this.$emit('msg', { msg: "Podróż rozpoczęta.", date: this.getFormattedDate() });
+			if (!this.is_switched_on)
+				return;
+			if (this.flight)
+				clearInterval(this.flight);
+			let secs = 0;
+			this.flight = setInterval(() => {
+				secs++;
+				if (secs < this.flight_time) {
+					this.longitude += (this.target_longitude - this.longitude) / (this.flight_time - secs);
+					this.latitude += (this.target_latitude - this.latitude) / (this.flight_time - secs);
+				}
+				else {
+					this.longitude = this.target_longitude;
+					this.latitude = this.target_latitude;
+					this.stopFlight();
+				}
+			}, this.message_rate);
+			this.$emit('target_loc', { x: this.target_longitude, y: this.target_latitude });
+			this.$emit('msg', { msg: 'Podróż rozpoczęta.', date: this.getFormattedDate() });
 		},
-		endFlight() {
-			this.$emit('msg', { msg: "Podróż zakończona.", date: this.getFormattedDate() });
-		},
-		lostGPS() {
-			this.$emit('msg', { msg: "Utracono sygnał GPS!", date: this.getFormattedDate() });
-		},
-		restoreGPS() {
-			this.$emit('msg', { msg: "Przywrócono sygnał GPS.", date: this.getFormattedDate() });
+		stopFlight() {
+			if (!this.is_switched_on)
+				return;
+			if (this.flight)
+				clearInterval(this.flight);
+			this.flight = null;
+			this.$emit('msg', { msg: 'Podróż zakończona.', date: this.getFormattedDate() });
 		},
 		getFormattedDate() {
 			let current_time = new Date();
@@ -129,7 +173,8 @@ export default {
 			return date;
 		},
 		startPublishing() {
-			// ROZPOCZECIE, nie kontynuacja nowego watku
+			if (!this.is_switched_on)
+				return;
 			const start_time = Math.floor(new Date().getTime() / 1000);
 			this.sendMessages(start_time);
 			if (!this.timer) {
@@ -141,7 +186,7 @@ export default {
 		stopPublishing() {
 			if (this.timer)
 				clearInterval(this.timer);
-			this.timer = null
+			this.timer = null;
 		},
 		sendMessages(start_time) {
 			let current_time = new Date();
@@ -153,7 +198,7 @@ export default {
 			// zapisanie temperatury i wibracji
 			this.$emit('temperature', { x: secs, y: temp });
 			this.$emit('wibration', { x: secs, y: wibr });
-			this.$emit('location', { x: 50.000001, y: 20.000001 });
+			this.$emit('location', { x: this.longitude, y: this.latitude });
 		},
 	},
 	beforeDestroy() {
@@ -161,6 +206,8 @@ export default {
 			clearInterval(this.timer);
 		if (this.regulator)
 			clearInterval(this.regulator);
+		if (this.flight)
+			clearInterval(this.flight);
 	},
 }
 </script>
@@ -199,8 +246,20 @@ div.settings-box ul li {
 	place-content: space-between;
 }
 
+div.settings-box ul li.bot {
+	min-height: 1em;
+	max-height: 6em;
+	padding: 0.2em;
+	display: flex;
+	place-content: space-between;
+}
+
 div.settings-box ul li label {
 	padding: 15px 0;
+}
+
+div.settings-box ul li.bot label {
+	padding: 0;
 }
 
 div.settings-box ul li input {

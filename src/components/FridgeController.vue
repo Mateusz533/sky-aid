@@ -1,5 +1,4 @@
 <template>
-	<!-- - układ chłodzenia (temperatura zadana, chłodzenie lub nie) -->
 	<header>
 		<h1>SkyAid – aktywna medyczna lodówka transportowa dla dronów</h1>
 	</header>
@@ -22,23 +21,19 @@
 						v-model="max_wibration_level">
 				</div>
 				<div class="google-map">
-					<iframe
+					<canvas id="flight-map" style="background-color:rgb(187, 226, 198)" />
+					<!-- <iframe
 						src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d14237.334158585627!2d20.9938014096638!3d52.20378425810866!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x471eccced03dfec1%3A0x4255c2c01fd7ceb5!2sWydzia%C5%82%20Mechatroniki%20Politechniki%20Warszawskiej!5e0!3m2!1spl!2spl!4v1673479422229!5m2!1spl!2spl"
 						width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
-						referrerpolicy="no-referrer-when-downgrade"></iframe>
+						referrerpolicy="no-referrer-when-downgrade"></iframe> -->
 				</div>
 			</div>
 			<div class="right-side">
 				<div class="temperature-plot">
-					<!-- <TestPlot /> -->
 					<canvas id="temp-plot" />
-					<!-- <Scatter id="my-plot" :data="scatterChartConfig.data" :options="scatterChartConfig.options" /> -->
-					<!-- <Line :data="lineChartConfig.data" :options="lineChartConfig.options" /> -->
 				</div>
 				<div class="wibration-plot">
 					<canvas id="wibr-plot" />
-					<!-- <Scatter :data="scatterChartConfig.data" :options="scatterChartConfig.options" /> -->
-					<!-- <Line :data="lineChartConfig.data" :options="lineChartConfig.options" /> -->
 				</div>
 			</div>
 		</div>
@@ -59,37 +54,25 @@
 </template>
 
 <script>
-import { Scatter, Line } from 'vue-chartjs'
 import * as scatterChartConfig from './scatterChartConfig.js'
-//import * as lineChartConfig from './lineChartConfig.js'
-
+import { shallowRef } from '@vue/runtime-dom'
 import {
-	//CategoryScale,
+	Chart,
 	LinearScale,
 	PointElement,
 	LineElement,
-	//Title,
 	Tooltip,
-	//Legend,
-	Chart,
 	ScatterController,
 } from 'chart.js'
-// Scatter
-import { Chart as ChartJS } from 'chart.js'
-// ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend)
-// Line
-ChartJS.register(
-	//CategoryScale,
+
+Chart.register(
 	LinearScale,
 	PointElement,
 	LineElement,
-	//Title,
 	Tooltip,
-	//Legend,
-	ScatterController
+	ScatterController,
 )
-import TestPlot from './TestPlot.vue';
-import { shallowRef } from '@vue/runtime-dom'
+
 export default {
 	name: 'FridgeController',
 	props: {
@@ -97,11 +80,7 @@ export default {
 		real_temperature: { x: Number, y: Number },
 		wibration_level: { x: Number, y: Number },
 		location: { x: Number, y: Number },
-	},
-	components: {
-		Scatter,
-		Line,
-		TestPlot
+		target_location: { x: Number, y: Number },
 	},
 	emits: {
 		settemperature: null,
@@ -110,21 +89,17 @@ export default {
 		return {
 			temp_chart: null,
 			wibr_chart: null,
+			map_chart: null,
 			set_temperature: 0,
 			max_temperature_deviation: 0,
 			max_wibration_level: 50,
 			temp_data: shallowRef({ datasets: Array({ data: [] }) }),
 			wibr_data: shallowRef({ datasets: Array({ data: [] }) }),
+			map_data: shallowRef({ datasets: Array({ data: [] }) }),
 			messages: Array({ msg: String(), date: String() }),
-			/*messages: ["Temperatura wzrosła znacznie powyżej zadanej wartości!",
-				"Temperatura spadła znacznie poniżej zadanej wartości!",
-			]*/
 		}
 	},
 	methods: {
-		testFun() {
-			console.log("Test fun triggered.");
-		},
 		setTemperature() {
 			this.$emit('settemperature', this.set_temperature);
 		},
@@ -186,7 +161,7 @@ export default {
 				x: temp.x, y: this.set_temperature + this.max_temperature_deviation
 			}];
 			this.temp_chart = this.reRenderChart(this.temp_chart, this.temp_data);
-			// setTimeout(() => { this.show_temp = true; }, 100);
+
 			if (this.max_temperature_deviation > 0 && temp.y > this.set_temperature + this.max_temperature_deviation)
 				this.messages = [{ msg: "Temperatura wzrosła znacznie powyżej zakresu tolerancji!", date: this.getFormattedDate() }].concat(this.messages);
 
@@ -202,8 +177,38 @@ export default {
 				this.messages = [{ msg: "Przekroczono bezpieczny poziom drgań!", date: this.getFormattedDate() }].concat(this.messages);
 		},
 		location(loc) {
-			console.log("Szerokość: " + loc.x + ", długość: " + loc.y);
-		}
+			// console.log("Szerokość: " + loc.y + ", długość: " + loc.x);
+			this.map_chart.data.datasets[0].data = [loc];
+			this.map_chart.data.datasets[1].data[1] = loc;
+			this.map_chart.data.datasets[2].data[1] = loc;
+			this.map_chart = this.reRenderChart(this.map_chart, this.map_data);
+		},
+		target_location(target_loc) {
+			// console.log("Szerokość: " + loc.y + ", długość: " + loc.x);
+			let start_loc = this.map_chart.data.datasets[1].data[0];
+			this.map_chart.data.datasets[1].data = [target_loc, start_loc];
+			this.map_chart.data.datasets[2].data = [start_loc, start_loc];
+			let max_scope = Math.max(Math.abs(start_loc.x - target_loc.x), Math.abs(start_loc.y - target_loc.y));
+			let limits = {
+				x_min: (start_loc.x + target_loc.x) / 2 - 0.75 * max_scope,
+				x_max: (start_loc.x + target_loc.x) / 2 + 0.75 * max_scope,
+				y_min: (start_loc.y + target_loc.y) / 2 - 0.75 * max_scope,
+				y_max: (start_loc.y + target_loc.y) / 2 + 0.75 * max_scope,
+			};
+			this.map_chart.options.scales.x.min = limits.x_min;
+			this.map_chart.options.scales.x.max = limits.x_max;
+			this.map_chart.options.scales.y.min = limits.y_min;
+			this.map_chart.options.scales.y.max = limits.y_max;
+			this.map_chart.options.scales.xAxes.min = limits.x_min;
+			this.map_chart.options.scales.xAxes.max = limits.x_max;
+			this.map_chart.options.scales.yAxes.min = limits.y_min;
+			this.map_chart.options.scales.yAxes.max = limits.y_max;
+			this.map_chart.options.scales.x.ticks.stepSize = max_scope / 2;
+			this.map_chart.options.scales.y.ticks.stepSize = max_scope / 2;
+			this.map_chart.options.scales.xAxes.ticks.stepSize = max_scope / 2;
+			this.map_chart.options.scales.yAxes.ticks.stepSize = max_scope / 2;
+			this.map_chart = this.reRenderChart(this.map_chart, this.map_data);
+		},
 	},
 	mounted() {
 		const ctx_t = document.getElementById("temp-plot");
@@ -216,6 +221,7 @@ export default {
 			data: this.temp_data,
 			options: options
 		});
+
 		const ctx_w = document.getElementById("wibr-plot");
 		options = JSON.parse(JSON.stringify(scatterChartConfig.options));
 		options.scales.y.suggestedMin = 0;
@@ -226,6 +232,7 @@ export default {
 			data: this.wibr_data,
 			options: options
 		});
+
 		let dataset = {
 			elements: {
 				line: {
@@ -241,6 +248,153 @@ export default {
 		this.temp_data.datasets.push(dataset);
 		this.temp_data.datasets.push(JSON.parse(JSON.stringify(dataset)));
 		this.wibr_data.datasets.push(JSON.parse(JSON.stringify(dataset)));
+
+		const ctx_m = document.getElementById("flight-map");
+		this.map_data = {
+			datasets: [
+				{
+					data: [
+						{
+							x: 19,
+							y: 52,
+						},
+					],
+					elements: {
+						point: {
+							radius: 10,
+							borderWidth: 2,
+						},
+						line: {
+							display: false,
+						}
+					},
+				},
+				{
+					data: [
+						{
+							x: 19,
+							y: 52,
+						},
+						{
+							x: 19,
+							y: 52,
+						}
+					],
+				},
+				{
+					data: [
+						{
+							x: 19,
+							y: 52,
+						},
+						{
+							x: 19,
+							y: 52,
+						}
+					],
+					elements: {
+						line: {
+							backgroundColor: '#777777',
+							borderColor: '#777777',
+						},
+						point: {
+							backgroundColor: '#777777',
+						}
+					},
+				},
+			],
+		};
+		this.map_chart = new Chart(ctx_m, {
+			type: 'scatter',
+			data: this.map_data,
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				layout: {
+					padding: 5
+				},
+				scales: {
+					x: {
+						display: true,
+						suggestedMin: 18.99,
+						suggestedMax: 19.01,
+						border: {
+							width: 0,
+						},
+						ticks: {
+							stepSize: 0.01,
+						},
+						grid: {
+							// tickLength: 5,
+							tickWidth: 1,
+							lineWidth: 0,
+						},
+					},
+					xAxes: {
+						display: true,
+						suggestedMin: 18.99,
+						suggestedMax: 19.01,
+						position: 'top',
+						border: {
+							width: 0,
+						},
+						ticks: {
+							stepSize: 0.01,
+						},
+					},
+					y: {
+						display: true,
+						suggestedMin: 51.99,
+						suggestedMax: 52.01,
+						border: {
+							width: 0,
+						},
+						ticks: {
+							stepSize: 0.01,
+						},
+						grid: {
+							// tickLength: 5,
+							tickWidth: 1,
+							lineWidth: 0,
+						},
+					},
+					yAxes: {
+						display: true,
+						suggestedMin: 51.99,
+						suggestedMax: 52.01,
+						position: 'right',
+						border: {
+							width: 0,
+						},
+						ticks: {
+							stepSize: 0.01,
+						},
+					},
+				},
+				plugins: {
+					legend: {
+						display: false
+					}
+				},
+				animation: false,
+				showLine: true,
+				elements: {
+					line: {
+						tension: 0,
+						borderWidth: 3,
+						borderDash: [10, 10],
+						backgroundColor: '#0000FF',
+						borderColor: '#0000FF',
+					},
+					point: {
+						radius: 5,
+						backgroundColor: '#0000FF',
+						borderColor: '#FFFFFF',
+						borderWidth: 0,
+					}
+				},
+			}
+		});
 	},
 	beforeDestroy() {
 		if (this.temp_chart)
@@ -286,7 +440,7 @@ div.left-side {
 	padding: 1% 2%;
 	min-width: 400px;
 	max-width: 500px;
-	/* width: 30%; */
+	width: 30%;
 	height: 100%;
 	flex-grow: 1;
 }
@@ -325,7 +479,7 @@ div.right-side {
 	height: 100%;
 	min-width: 400px;
 	max-width: 90%;
-	width: 55%;
+	width: 50%;
 	flex-grow: 1;
 }
 
