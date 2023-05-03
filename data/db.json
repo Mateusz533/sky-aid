@@ -1,0 +1,29 @@
+{
+  "input": {
+    "settemperature": {
+      "value": null
+    }
+  },
+  "output": {
+    "msg": {
+      "msg": "",
+      "date": ""
+    },
+    "temperature": {
+      "x": null,
+      "y": null
+    },
+    "wibration": {
+      "x": null,
+      "y": null
+    },
+    "location": {
+      "x": null,
+      "y": null
+    },
+    "target_loc": {
+      "x": null,
+      "y": null
+    }
+  }
+}
