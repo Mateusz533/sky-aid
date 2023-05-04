@@ -1,20 +1,6 @@
 <template>
-  <FridgeController />
-  <TestSimulator />
+  <RouterView />
 </template>
-
-<script>
-import FridgeController from "./components/FridgeController.vue";
-import TestSimulator from "./components/TestSimulator.vue";
-
-export default {
-  name: "App",
-  components: {
-    FridgeController,
-    TestSimulator,
-  },
-};
-</script>
 
 <style>
 #app {
