@@ -20,7 +20,7 @@
           min="-10.0"
           max="40.0"
           step="0.1"
-          v-model="this.real_temperature"
+          v-model="realTemperature"
         />
       </li>
       <li>
@@ -30,7 +30,7 @@
           min="0.0"
           max="100.0"
           step="1.0"
-          v-model="this.wibration_level"
+          v-model="wibrationLevel"
         />
       </li>
       <li>
@@ -40,7 +40,7 @@
           min="0.0"
           max="5.0"
           step="0.1"
-          v-model="this.temperature_oscillations_amplitude"
+          v-model="temperatureOscillationsAmplitude"
         />
       </li>
       <li>
@@ -50,7 +50,7 @@
           min="0.0"
           max="20.0"
           step="0.1"
-          v-model="this.wibration_level_oscillations_amplitude"
+          v-model="wibrationLevelOscillationsAmplitude"
         />
       </li>
     </ul>
@@ -64,7 +64,7 @@
           min="49"
           max="55"
           step="0.00001"
-          v-model="this.target_latitude"
+          v-model="targetLatitude"
         />
       </li>
       <li class="bot">
@@ -74,7 +74,7 @@
           min="14"
           max="24"
           step="0.00001"
-          v-model="this.target_longitude"
+          v-model="targetLongitude"
         />
       </li>
     </ul>
@@ -88,24 +88,24 @@ export default {
   name: "TestSimulator",
   data() {
     return {
-      is_switched_on: false,
-      is_signal_GPS: true,
+      isSwitchedOn: false,
+      isSignalGPS: true,
       timer: null,
       regulator: null,
       flight: null,
       dataGetter: null,
-      target_latitude: 52,
-      target_longitude: 19,
+      targetLatitude: 52,
+      targetLongitude: 19,
       latitude: 52,
       longitude: 19,
-      set_temperature: 0,
-      real_temperature: 20,
-      wibration_level: 0,
-      temperature_oscillations_amplitude: 0,
-      wibration_level_oscillations_amplitude: 0,
-      message_rate: 1000, // [ms]
-      regulation_time: 10000,
-      flight_time: 60, // [message_rate]
+      temperatureSet: 0,
+      realTemperature: 20,
+      wibrationLevel: 0,
+      temperatureOscillationsAmplitude: 0,
+      wibrationLevelOscillationsAmplitude: 0,
+      messageRate: 1000, // [ms]
+      regulationTime: 10000,
+      flightTime: 60, // [messageRate]
     };
   },
   methods: {
@@ -115,7 +115,7 @@ export default {
         return res.data;
         // console.log(res.data);
       } catch (error) {
-        console.log(error);
+        // console.log(error);
       }
     },
     async updateServer(name, value) {
@@ -126,21 +126,21 @@ export default {
         );
         // console.log(res.data);
       } catch (error) {
-        console.log(error);
+        // console.log(error);
       }
     },
     async switchOn() {
-      if (this.is_switched_on) return;
+      if (this.isSwitchedOn) return;
       await this.updateServer("", {
         msg: {
           msg: "Włączono urządzenie.",
           date: this.getFormattedDate(),
         },
       });
-      this.is_switched_on = true;
+      this.isSwitchedOn = true;
     },
     async switchOff() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       await this.updateServer("", {
         msg: {
           msg: "Wyłączono urządzenie.",
@@ -148,7 +148,7 @@ export default {
         },
         location: { x: NaN, y: NaN },
       });
-      this.is_switched_on = false;
+      this.isSwitchedOn = false;
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
       if (this.regulator) clearInterval(this.regulator);
@@ -159,7 +159,7 @@ export default {
       this.dataGetter = null;
     },
     async putRightCard() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       await this.updateServer("", {
         msg: {
           msg: "Poprawny odczyt karty. Drzwi otwarte.",
@@ -168,7 +168,7 @@ export default {
       });
     },
     async putWrongCard() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       await this.updateServer("", {
         msg: {
           msg: "Błędny odczyt karty!",
@@ -177,47 +177,47 @@ export default {
       });
     },
     async loseSignalGPS() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       await this.updateServer("", {
         msg: {
           msg: "Utracono sygnał GPS!",
           date: this.getFormattedDate(),
         },
       });
-      this.is_signal_GPS = false;
+      this.isSignalGPS = false;
     },
     async restoreSignalGPS() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       await this.updateServer("", {
         msg: {
           msg: "Przywrócono sygnał GPS.",
           date: this.getFormattedDate(),
         },
       });
-      this.is_signal_GPS = true;
+      this.isSignalGPS = true;
     },
     async startFlight() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       if (this.flight) clearInterval(this.flight);
       let secs = 0;
       this.flight = setInterval(() => {
         secs++;
-        if (secs < this.flight_time) {
+        if (secs < this.flightTime) {
           this.longitude +=
-            (this.target_longitude - this.longitude) /
-            (this.flight_time - secs);
+            (this.targetLongitude - this.longitude) /
+            (this.flightTime - secs);
           this.latitude +=
-            (this.target_latitude - this.latitude) / (this.flight_time - secs);
+            (this.targetLatitude - this.latitude) / (this.flightTime - secs);
         } else {
-          this.longitude = this.target_longitude;
-          this.latitude = this.target_latitude;
+          this.longitude = this.targetLongitude;
+          this.latitude = this.targetLatitude;
           this.stopFlight();
         }
-      }, this.message_rate);
+      }, this.messageRate);
       await this.updateServer("", {
         target_loc: {
-          x: this.target_longitude,
-          y: this.target_latitude,
+          x: this.targetLongitude,
+          y: this.targetLatitude,
         },
         msg: {
           msg: "Podróż rozpoczęta.",
@@ -226,7 +226,7 @@ export default {
       });
     },
     async stopFlight() {
-      if (!this.is_switched_on) return;
+      if (!this.isSwitchedOn) return;
       if (this.flight) clearInterval(this.flight);
       this.flight = null;
       await this.updateServer("", {
@@ -237,11 +237,11 @@ export default {
       });
     },
     getFormattedDate() {
-      let current_time = new Date();
+      const currentTime = new Date();
+      const hours = currentTime.getHours();
+      const minutes = currentTime.getMinutes();
+      const seconds = currentTime.getSeconds();
       let date = "";
-      let hours = current_time.getHours();
-      let minutes = current_time.getMinutes();
-      let seconds = current_time.getSeconds();
       if (hours < 10) date += "0";
       if (hours == 1) date += "0:";
       else date += hours.toString() + ":";
@@ -254,13 +254,13 @@ export default {
       return date;
     },
     startPublishing() {
-      if (!this.is_switched_on) return;
-      const start_time = Math.floor(new Date().getTime() / 1000);
-      this.sendMessages(start_time);
+      if (!this.isSwitchedOn) return;
+      const startTime = Math.floor(new Date().getTime() / 1000);
+      this.sendMessages(startTime);
       if (!this.timer) {
         this.timer = setInterval(async () => {
-          this.sendMessages(start_time);
-        }, this.message_rate);
+          this.sendMessages(startTime);
+        }, this.messageRate);
       }
     },
     async stopPublishing() {
@@ -270,19 +270,19 @@ export default {
         await this.updateServer("", { location: { x: NaN, y: NaN } });
       }
     },
-    async sendMessages(start_time) {
-      let current_time = new Date();
-      let secs = Math.floor(current_time.getTime() / 1000) - start_time;
-      let rand_cos_dist = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
-      let temp =
-        parseFloat(this.real_temperature) +
-        parseFloat(this.temperature_oscillations_amplitude) * rand_cos_dist;
-      rand_cos_dist = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
-      let wibr =
-        parseFloat(this.wibration_level) +
-        parseFloat(this.wibration_level_oscillations_amplitude) * rand_cos_dist;
+    async sendMessages(startTime) {
+      const currentTime = new Date();
+      const secs = Math.floor(currentTime.getTime() / 1000) - startTime;
+      let randCosDist = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
+      const temp =
+        parseFloat(this.realTemperature) +
+        parseFloat(this.temperatureOscillationsAmplitude) * randCosDist;
+      randCosDist = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
+      const wibr =
+        parseFloat(this.wibrationLevel) +
+        parseFloat(this.wibrationLevelOscillationsAmplitude) * randCosDist;
       // zapisanie temperatury i wibracji
-      const location = this.is_signal_GPS
+      const location = this.isSignalGPS
         ? { x: this.longitude, y: this.latitude }
         : { x: NaN, y: NaN };
       await this.updateServer("", {
@@ -307,16 +307,16 @@ export default {
     if (!this.dataGetter) {
       this.dataGetter = setInterval(async () => {
         const data = await this.getFromServer("");
-        this.set_temperature_test = data.settemperature.value;
-        if (!this.is_switched_on || this.regulator) return;
+        this.temperatureSet = data.settemperature.value;
+        if (!this.isSwitchedOn || this.regulator) return;
         this.regulator = setInterval(() => {
-          this.real_temperature = parseFloat(this.real_temperature);
-          if (this.set_temperature !== null)
-            this.real_temperature +=
-              (this.message_rate / this.regulation_time) *
-              (parseFloat(this.set_temperature) - this.real_temperature);
-        }, this.message_rate);
-      }, this.message_rate);
+          this.realTemperature = parseFloat(this.realTemperature);
+          if (this.temperatureSet !== null)
+            this.realTemperature +=
+              (this.messageRate / this.regulationTime) *
+              (parseFloat(this.temperatureSet) - this.realTemperature);
+        }, this.messageRate);
+      }, this.messageRate);
     }
   },
   beforeDestroy() {
