@@ -1,16 +1,17 @@
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
 import axios from "axios";
 
-export default {
+export default defineComponent({
   name: "TestSimulator",
   data() {
     return {
       isSwitchedOn: false,
       isSignalGPS: true,
-      timer: null,
-      regulator: null,
-      flight: null,
-      dataGetter: null,
+      timer: null as null | number,
+      regulator: null as null | number,
+      flight: null as null | number,
+      dataGetter: null as null | number,
       targetLatitude: 52,
       targetLongitude: 19,
       latitude: 52,
@@ -26,7 +27,7 @@ export default {
     };
   },
   methods: {
-    async getFromServer(name) {
+    async getFromServer(name: string) {
       try {
         const res = await axios.get(`http://localhost:3000/input/${name}`);
         return res.data;
@@ -35,7 +36,7 @@ export default {
         // console.log(error);
       }
     },
-    async updateServer(name, value) {
+    async updateServer(name: string, value: Object) {
       try {
         const res = await axios.patch(
           `http://localhost:3000/output/${name}`,
@@ -126,7 +127,7 @@ export default {
       this.flight = null;
       this.sendMessage("Podróż zakończona.");
     },
-    async sendMessage(text) {
+    async sendMessage(text: string) {
       await this.updateServer("", {
         msg: {
           msg: text,
@@ -170,17 +171,17 @@ export default {
         await this.updateServer("", { location: { x: NaN, y: NaN } });
       }
     },
-    async sendData(startTime) {
+    async sendData(startTime: number) {
       const currentTime = new Date();
       const secs = Math.floor(currentTime.getTime() / 1000) - startTime;
-      let randCosDist = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
+      const randCosDist1 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
       const temp =
-        parseFloat(this.realTemperature) +
-        parseFloat(this.temperatureOscillationsAmplitude) * randCosDist;
-      randCosDist = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
+        this.realTemperature +
+        this.temperatureOscillationsAmplitude * randCosDist1;
+      const randCosDist2 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
       const wibr =
-        parseFloat(this.wibrationLevel) +
-        parseFloat(this.wibrationLevelOscillationsAmplitude) * randCosDist;
+        this.wibrationLevel +
+        this.wibrationLevelOscillationsAmplitude * randCosDist2;
       const location = this.isSignalGPS
         ? { x: this.longitude, y: this.latitude }
         : { x: NaN, y: NaN };
@@ -211,7 +212,6 @@ export default {
         if (!this.isSwitchedOn || this.regulator) return;
 
         this.regulator = setInterval(() => {
-          this.realTemperature = parseFloat(this.realTemperature);
           if (!isNaN(this.targetTemperature))
             this.realTemperature +=
               (this.messageRate / this.regulationTime) *
@@ -226,7 +226,7 @@ export default {
     if (this.flight) clearInterval(this.flight);
     if (this.dataGetter) clearInterval(this.dataGetter);
   },
-};
+});
 </script>
 
 <template>
@@ -251,7 +251,7 @@ export default {
           min="-10.0"
           max="40.0"
           step="0.1"
-          v-model="realTemperature"
+          v-model.number="realTemperature"
         />
       </li>
       <li>
@@ -261,7 +261,7 @@ export default {
           min="0.0"
           max="100.0"
           step="1.0"
-          v-model="wibrationLevel"
+          v-model.number="wibrationLevel"
         />
       </li>
       <li>
@@ -271,7 +271,7 @@ export default {
           min="0.0"
           max="5.0"
           step="0.1"
-          v-model="temperatureOscillationsAmplitude"
+          v-model.number="temperatureOscillationsAmplitude"
         />
       </li>
       <li>
@@ -281,7 +281,7 @@ export default {
           min="0.0"
           max="20.0"
           step="0.1"
-          v-model="wibrationLevelOscillationsAmplitude"
+          v-model.number="wibrationLevelOscillationsAmplitude"
         />
       </li>
     </ul>

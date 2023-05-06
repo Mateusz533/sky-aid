@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
+import { shallowRef } from "@vue/runtime-dom";
 import axios from "axios";
 
-import * as scatterChartConfig from "./scatterChartConfig.js";
-import * as mapChartConfig from "./mapConfig.js";
-import { shallowRef } from "@vue/runtime-dom";
+import * as scatterChartConfig from "./scatterChartConfig";
+import * as mapChartConfig from "./mapConfig";
 import { Scatter } from "vue-chartjs";
 import {
   Chart,
@@ -11,27 +12,29 @@ import {
   PointElement,
   LineElement,
   Tooltip,
+  ChartData,
+  ChartOptions,
 } from "chart.js";
 
 Chart.register(LinearScale, PointElement, LineElement, Tooltip);
 
-export default {
+export default defineComponent({
   name: "FridgeController",
   components: { Scatter },
   data() {
     return {
-      dataGetter: null,
+      dataGetter: null as null | number,
       tempChart: shallowRef({
-        data: null,
-        options: null,
+        data: {} as ChartData<"scatter">,
+        options: {} as ChartOptions<"scatter">,
       }),
       wibrChart: shallowRef({
-        data: null,
-        options: null,
+        data: {} as ChartData<"scatter">,
+        options: {} as ChartOptions<"scatter">,
       }),
       mapChart: shallowRef({
-        data: null,
-        options: null,
+        data: {} as ChartData<"scatter"> | any,
+        options: {} as ChartOptions<"scatter"> | any,
       }),
       tempChartKey: 0,
       wibrChartKey: 0,
@@ -45,7 +48,7 @@ export default {
     };
   },
   methods: {
-    async getFromServer(name) {
+    async getFromServer(name: string) {
       try {
         const res = await axios.get(`http://localhost:3000/output/${name}`);
         return res.data;
@@ -54,7 +57,7 @@ export default {
         console.log(error);
       }
     },
-    async updateServer(name, value) {
+    async updateServer(name: string, value: Object) {
       try {
         const res = await axios.patch(
           `http://localhost:3000/input/${name}`,
@@ -90,7 +93,7 @@ export default {
 
       return date;
     },
-    setRealTemperature(temp) {
+    setRealTemperature(temp: { x: number; y: number }) {
       // console.log("Czas: " + temp.x + ", temp: " + temp.y);
       if (temp.x < 1) {
         this.tempChart.data.datasets[0].data = [temp];
@@ -143,7 +146,7 @@ export default {
           date: this.getFormattedDate(),
         });
     },
-    setWibrationLevel(wibr) {
+    setWibrationLevel(wibr: { x: number; y: number }) {
       // console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
       if (wibr.x < 1) {
         this.wibrChart.data.datasets[0].data = [wibr];
@@ -165,7 +168,7 @@ export default {
           date: this.getFormattedDate(),
         });
     },
-    setLocation(loc) {
+    setLocation(loc: { x: number; y: number }) {
       // console.log("Szerokość: " + loc.y + ", długość: " + loc.x);
       if (isNaN(loc.x) || loc.x === null || isNaN(loc.y) || loc.y === null) {
         this.mapChart.data.datasets[0].elements.point.backgroundColor =
@@ -179,13 +182,16 @@ export default {
       }
       this.mapChartKey++;
     },
-    setTargetLocation(targetLoc) {
+    setTargetLocation(targetLoc: { x: number; y: number }) {
       if (targetLoc.x === this.targetLoc.x && targetLoc.y === this.targetLoc.y)
         return;
 
       // console.log("Szerokość: " + target_loc.y + ", długość: " + target_loc.x);
       this.targetLoc = { x: targetLoc.x, y: targetLoc.y };
-      const startLoc = this.mapChart.data.datasets[1].data[0];
+      const startLoc = this.mapChart.data.datasets[1].data[0] as {
+        x: number;
+        y: number;
+      };
       this.mapChart.data.datasets[1].data = [targetLoc, startLoc];
       this.mapChart.data.datasets[2].data = [startLoc, startLoc];
       const maxScope = Math.max(
@@ -276,7 +282,7 @@ export default {
       options: mapOptions,
     };
   },
-};
+});
 </script>
 
 <template>
@@ -291,7 +297,7 @@ export default {
           <input
             type="number"
             name="temperature-value"
-            id=""
+            id="temperature-value"
             min="-4"
             max="36"
             step="0.1"
@@ -304,7 +310,7 @@ export default {
           <input
             type="number"
             name="temperature-deviation"
-            id=""
+            id="temperature-deviation"
             min="0"
             max="10"
             step="0.05"
@@ -316,7 +322,7 @@ export default {
           <input
             type="number"
             name="wibration-value"
-            id=""
+            id="wibration-value"
             min="0"
             max="100"
             step="1"
@@ -328,7 +334,7 @@ export default {
             style="background-color: rgb(187, 226, 198)"
             :key="mapChartKey"
             :data="mapChart.data"
-            :options="mapChart.options"
+            :options="(mapChart.options as ChartOptions<'scatter'>)"
           />
         </div>
       </div>
