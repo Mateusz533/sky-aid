@@ -7,23 +7,27 @@ export default defineComponent({
   data() {
     return {
       isSwitchedOn: false,
-      isSignalGPS: true,
-      timer: null as null | number,
-      regulator: null as null | number,
-      flight: null as null | number,
-      dataGetter: null as null | number,
-      targetLatitude: 52,
-      targetLongitude: 19,
-      latitude: 52,
-      longitude: 19,
+      dataGetter: null as number | null,
+      messageInterval: null as number | null,
+      messageRate: 1000, // [ms]
+      temperatureRegulator: null as number | null,
+      regulationTime: 10000,
       targetTemperature: 0,
       realTemperature: 20,
-      wibrationLevel: 0,
       temperatureOscillationsAmplitude: 0,
+      wibrationLevel: 0,
       wibrationLevelOscillationsAmplitude: 0,
-      messageRate: 1000, // [ms]
-      regulationTime: 10000,
+      isSignalGPS: true,
+      flightInterval: null as number | null,
       flightTime: 60, // [messageRate]
+      targetPosition: {
+        lat: 52.2,
+        lng: 21,
+      },
+      currentPosition: {
+        lat: 52.203,
+        lng: 21.001,
+      },
     };
   },
   methods: {
@@ -31,18 +35,13 @@ export default defineComponent({
       try {
         const res = await axios.get(`http://localhost:3000/input/${name}`);
         return res.data;
-        // console.log(res.data);
       } catch (error) {
-        // console.log(error);
+        return null;
       }
     },
     async updateServer(name: string, value: Object) {
       try {
-        const res = await axios.patch(
-          `http://localhost:3000/output/${name}`,
-          value
-        );
-        // console.log(res.data);
+        await axios.patch(`http://localhost:3000/output/${name}`, value);
       } catch (error) {
         // console.log(error);
       }
@@ -57,19 +56,19 @@ export default defineComponent({
 
       await this.updateServer("", {
         msg: {
-          msg: "Wyłączono urządzenie.",
+          text: "Wyłączono urządzenie.",
           date: this.getFormattedDate(),
         },
-        location: { x: NaN, y: NaN },
+        currentLocation: { lat: NaN, lng: NaN },
       });
 
       this.isSwitchedOn = false;
-      if (this.timer) clearInterval(this.timer);
-      this.timer = null;
-      if (this.regulator) clearInterval(this.regulator);
-      this.regulator = null;
-      if (this.flight) clearInterval(this.flight);
-      this.flight = null;
+      if (this.messageInterval) clearInterval(this.messageInterval);
+      this.messageInterval = null;
+      if (this.temperatureRegulator) clearInterval(this.temperatureRegulator);
+      this.temperatureRegulator = null;
+      if (this.flightInterval) clearInterval(this.flightInterval);
+      this.flightInterval = null;
       if (this.dataGetter) clearInterval(this.dataGetter);
       this.dataGetter = null;
     },
@@ -94,43 +93,41 @@ export default defineComponent({
     async startFlight() {
       if (!this.isSwitchedOn) return;
 
-      if (this.flight) clearInterval(this.flight);
+      if (this.flightInterval) clearInterval(this.flightInterval);
       let secs = 0;
-      this.flight = setInterval(() => {
+      this.flightInterval = setInterval(() => {
         secs++;
         if (secs < this.flightTime) {
-          this.longitude +=
-            (this.targetLongitude - this.longitude) / (this.flightTime - secs);
-          this.latitude +=
-            (this.targetLatitude - this.latitude) / (this.flightTime - secs);
+          this.currentPosition.lat +=
+            (this.targetPosition.lat - this.currentPosition.lat) /
+            (this.flightTime - secs);
+          this.currentPosition.lng +=
+            (this.targetPosition.lng - this.currentPosition.lng) /
+            (this.flightTime - secs);
         } else {
-          this.longitude = this.targetLongitude;
-          this.latitude = this.targetLatitude;
+          this.currentPosition = { ...this.targetPosition };
           this.stopFlight();
         }
       }, this.messageRate);
 
       await this.updateServer("", {
-        target_loc: {
-          x: this.targetLongitude,
-          y: this.targetLatitude,
-        },
+        targetLocation: this.targetPosition,
         msg: {
-          msg: "Podróż rozpoczęta.",
+          text: "Podróż rozpoczęta.",
           date: this.getFormattedDate(),
         },
       });
     },
     async stopFlight() {
       if (!this.isSwitchedOn) return;
-      if (this.flight) clearInterval(this.flight);
-      this.flight = null;
+      if (this.flightInterval) clearInterval(this.flightInterval);
+      this.flightInterval = null;
       this.sendMessage("Podróż zakończona.");
     },
     async sendMessage(text: string) {
       await this.updateServer("", {
         msg: {
-          msg: text,
+          text: text,
           date: this.getFormattedDate(),
         },
       });
@@ -158,60 +155,63 @@ export default defineComponent({
 
       const startTime = Math.floor(new Date().getTime() / 1000);
       this.sendData(startTime);
-      if (!this.timer) {
-        this.timer = setInterval(async () => {
+      if (!this.messageInterval) {
+        this.messageInterval = setInterval(async () => {
           this.sendData(startTime);
         }, this.messageRate);
       }
     },
     async stopPublishing() {
-      if (this.timer) {
-        clearInterval(this.timer);
-        this.timer = null;
-        await this.updateServer("", { location: { x: NaN, y: NaN } });
+      if (this.messageInterval) {
+        clearInterval(this.messageInterval);
+        this.messageInterval = null;
+        await this.updateServer("", {
+          currentLocation: { lat: NaN, lng: NaN },
+        });
       }
     },
     async sendData(startTime: number) {
-      const currentTime = new Date();
-      const secs = Math.floor(currentTime.getTime() / 1000) - startTime;
+      const currentTime = new Date().getTime() / 1000;
+      const secs = Math.floor(currentTime) - startTime;
       const randCosDist1 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
-      const temp =
+      const temperature =
         this.realTemperature +
         this.temperatureOscillationsAmplitude * randCosDist1;
       const randCosDist2 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
-      const wibr =
+      const wibration =
         this.wibrationLevel +
         this.wibrationLevelOscillationsAmplitude * randCosDist2;
-      const location = this.isSignalGPS
-        ? { x: this.longitude, y: this.latitude }
-        : { x: NaN, y: NaN };
+      const currentLocation = this.isSignalGPS
+        ? this.currentPosition
+        : { lat: NaN, lng: NaN };
 
       await this.updateServer("", {
-        temperature: { x: secs, y: temp },
-        wibration: { x: secs, y: wibr },
-        location: location,
+        temperature: { time: secs, value: temperature },
+        wibration: { time: secs, value: wibration },
+        currentLocation: currentLocation,
       });
     },
   },
   mounted() {
     this.updateServer("", {
       msg: {
-        msg: "",
+        text: "",
         date: "",
       },
-      temperature: { x: NaN, y: NaN },
-      wibration: { x: NaN, y: NaN },
-      location: { x: NaN, y: NaN },
-      target_loc: { x: NaN, y: NaN },
+      temperature: { time: NaN, value: NaN },
+      wibration: { time: NaN, value: NaN },
+      currentLocation: { lat: NaN, lng: NaN },
+      targetLocation: { lat: NaN, lng: NaN },
     });
 
     if (!this.dataGetter) {
       this.dataGetter = setInterval(async () => {
         const data = await this.getFromServer("");
-        this.targetTemperature = parseFloat(data.settemperature.value);
-        if (!this.isSwitchedOn || this.regulator) return;
+        if (data === null) return;
+        this.targetTemperature = parseFloat(data.setTemperature.value);
+        if (!this.isSwitchedOn || this.temperatureRegulator) return;
 
-        this.regulator = setInterval(() => {
+        this.temperatureRegulator = setInterval(() => {
           if (!isNaN(this.targetTemperature))
             this.realTemperature +=
               (this.messageRate / this.regulationTime) *
@@ -221,9 +221,9 @@ export default defineComponent({
     }
   },
   beforeDestroy() {
-    if (this.timer) clearInterval(this.timer);
-    if (this.regulator) clearInterval(this.regulator);
-    if (this.flight) clearInterval(this.flight);
+    if (this.messageInterval) clearInterval(this.messageInterval);
+    if (this.temperatureRegulator) clearInterval(this.temperatureRegulator);
+    if (this.flightInterval) clearInterval(this.flightInterval);
     if (this.dataGetter) clearInterval(this.dataGetter);
   },
 });
@@ -295,7 +295,7 @@ export default defineComponent({
           min="49"
           max="55"
           step="0.00001"
-          v-model="targetLatitude"
+          v-model="targetPosition.lat"
         />
       </li>
       <li class="bot">
@@ -305,7 +305,7 @@ export default defineComponent({
           min="14"
           max="24"
           step="0.00001"
-          v-model="targetLongitude"
+          v-model="targetPosition.lng"
         />
       </li>
     </ul>

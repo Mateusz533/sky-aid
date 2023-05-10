@@ -2,13 +2,14 @@
   <FridgeController />
 </template>
 
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
 import FridgeController from "@/components/FridgeController.vue";
 
-export default {
+export default defineComponent({
   name: "HomeView",
   components: {
     FridgeController,
   },
-};
+});
 </script>

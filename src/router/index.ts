@@ -1,6 +1,6 @@
 import { createRouter, createWebHashHistory } from "vue-router";
-import HomeView from "@/views/HomeView";
-import SimulatorView from "@/views/SimulatorView";
+import HomeView from "@/views/HomeView.vue";
+import SimulatorView from "@/views/SimulatorView.vue";
 
 const routes = [
   {

@@ -4,46 +4,53 @@ import { shallowRef } from "@vue/runtime-dom";
 import axios from "axios";
 
 import * as scatterChartConfig from "./scatterChartConfig";
-import * as mapChartConfig from "./mapConfig";
 import { Scatter } from "vue-chartjs";
 import {
   Chart,
+  ChartData,
+  ChartOptions,
   LinearScale,
   PointElement,
   LineElement,
   Tooltip,
-  ChartData,
-  ChartOptions,
 } from "chart.js";
 
 Chart.register(LinearScale, PointElement, LineElement, Tooltip);
+
+import { Loader } from "@googlemaps/js-api-loader";
+const GOOGLE_MAPS_API_KEY = "AIzaSyAnbN24W9SsTUdMxjnwaVP0Htn8OZe4RqE";
 
 export default defineComponent({
   name: "FridgeController",
   components: { Scatter },
   data() {
     return {
-      dataGetter: null as null | number,
-      tempChart: shallowRef({
+      dataGetter: null as number | null,
+      isConnected: false,
+      temperatureChart: shallowRef({
         data: {} as ChartData<"scatter">,
         options: {} as ChartOptions<"scatter">,
       }),
-      wibrChart: shallowRef({
-        data: {} as ChartData<"scatter">,
-        options: {} as ChartOptions<"scatter">,
-      }),
-      mapChart: shallowRef({
-        data: {} as ChartData<"scatter"> | any,
-        options: {} as ChartOptions<"scatter"> | any,
-      }),
-      tempChartKey: 0,
-      wibrChartKey: 0,
-      mapChartKey: 0,
+      temperatureChartKey: 0,
       targetTemperature: 0,
       maxTemperatureDeviation: 0,
+      wibrationChart: shallowRef({
+        data: {} as ChartData<"scatter">,
+        options: {} as ChartOptions<"scatter">,
+      }),
+      wibrationChartKey: 0,
       maxWibrationLevel: 50,
-      targetLoc: { x: Number(), y: Number() },
-      messages: Array({ msg: String(), date: String() }),
+      map: null as google.maps.Map | null,
+      paths: {
+        startLine: null as google.maps.Polyline | null,
+        endLine: null as google.maps.Polyline | null,
+        startPoint: null as google.maps.Polyline | null,
+        endPoint: null as google.maps.Polyline | null,
+        currentPointBackground: null as google.maps.Polyline | null,
+        currentPointBorder: null as google.maps.Polyline | null,
+      },
+      targetLocation: { lat: Number(), lng: Number() },
+      messages: Array({ text: String(), date: String() }),
       messageRate: 1000, // [ms]
     };
   },
@@ -51,26 +58,36 @@ export default defineComponent({
     async getFromServer(name: string) {
       try {
         const res = await axios.get(`http://localhost:3000/output/${name}`);
+        if (!this.isConnected) {
+          this.isConnected = true;
+          this.addMessage("Połączono z serwerem.");
+        }
         return res.data;
-        // console.log(res.data);
       } catch (error) {
-        console.log(error);
+        if (this.isConnected) {
+          this.isConnected = false;
+          this.addMessage("Utracono połączenie z serwerem!");
+        }
+        return null;
       }
     },
     async updateServer(name: string, value: Object) {
       try {
-        const res = await axios.patch(
-          `http://localhost:3000/input/${name}`,
-          value
-        );
-        // console.log(res.data);
+        await axios.patch(`http://localhost:3000/input/${name}`, value);
+        if (!this.isConnected) {
+          this.isConnected = true;
+          this.addMessage("Połączono z serwerem.");
+        }
       } catch (error) {
-        console.log(error);
+        if (this.isConnected) {
+          this.isConnected = false;
+          this.addMessage("Utracono połączenie z serwerem!");
+        }
       }
     },
     async setTemperature() {
       await this.updateServer("", {
-        settemperature: {
+        setTemperature: {
           value: this.targetTemperature,
         },
       });
@@ -93,158 +110,216 @@ export default defineComponent({
 
       return date;
     },
-    setRealTemperature(temp: { x: number; y: number }) {
-      // console.log("Czas: " + temp.x + ", temp: " + temp.y);
-      if (temp.x < 1) {
-        this.tempChart.data.datasets[0].data = [temp];
-        this.tempChart.data.datasets[1].data = [
-          { x: 0, y: this.targetTemperature - this.maxTemperatureDeviation },
+    addMessage(text: string, date?: string) {
+      this.messages.unshift({
+        text: text,
+        date: date ? date : this.getFormattedDate(),
+      });
+    },
+    setRealTemperature(temperature: { time: number; value: number }) {
+      const minTemp = this.targetTemperature - this.maxTemperatureDeviation;
+      const maxTemp = this.targetTemperature + this.maxTemperatureDeviation;
+      if (temperature.time < 1) {
+        this.temperatureChart.data.datasets[0].data = [
+          { x: temperature.time, y: temperature.value },
         ];
-        this.tempChart.data.datasets[2].data = [
-          { x: 0, y: this.targetTemperature + this.maxTemperatureDeviation },
-        ];
+        this.temperatureChart.data.datasets[1].data = [{ x: 0, y: minTemp }];
+        this.temperatureChart.data.datasets[2].data = [{ x: 0, y: maxTemp }];
       } else {
-        this.tempChart.data.datasets[0].data.push(temp);
-        this.tempChart.data.datasets[1].data = [
-          {
-            x: 0,
-            y: this.targetTemperature - this.maxTemperatureDeviation,
-          },
-          {
-            x: temp.x,
-            y: this.targetTemperature - this.maxTemperatureDeviation,
-          },
+        this.temperatureChart.data.datasets[0].data.push({
+          x: temperature.time,
+          y: temperature.value,
+        });
+        this.temperatureChart.data.datasets[1].data = [
+          { x: 0, y: minTemp },
+          { x: temperature.time, y: minTemp },
         ];
-        this.tempChart.data.datasets[2].data = [
-          {
-            x: 0,
-            y: this.targetTemperature + this.maxTemperatureDeviation,
-          },
-          {
-            x: temp.x,
-            y: this.targetTemperature + this.maxTemperatureDeviation,
-          },
+        this.temperatureChart.data.datasets[2].data = [
+          { x: 0, y: maxTemp },
+          { x: temperature.time, y: maxTemp },
         ];
       }
-      this.tempChartKey++;
+      this.temperatureChartKey++;
 
-      if (
-        this.maxTemperatureDeviation > 0 &&
-        temp.y > this.targetTemperature + this.maxTemperatureDeviation
-      )
-        this.messages.unshift({
-          msg: "Temperatura wzrosła znacznie powyżej zakresu tolerancji!",
-          date: this.getFormattedDate(),
-        });
-
-      if (
-        this.maxTemperatureDeviation > 0 &&
-        temp.y < this.targetTemperature - this.maxTemperatureDeviation
-      )
-        this.messages.unshift({
-          msg: "Temperatura spadła znacznie poniżej zakresu tolerancji!",
-          date: this.getFormattedDate(),
-        });
+      if (this.maxTemperatureDeviation <= 0) return;
+      if (temperature.value > maxTemp)
+        this.addMessage("Temperatura wzrosła powyżej zakresu tolerancji!");
+      if (temperature.value < minTemp)
+        this.addMessage("Temperatura spadła poniżej zakresu tolerancji!");
     },
-    setWibrationLevel(wibr: { x: number; y: number }) {
-      // console.log("Czas: " + wibr.x + ", wibr: " + wibr.y);
-      if (wibr.x < 1) {
-        this.wibrChart.data.datasets[0].data = [wibr];
-        this.wibrChart.data.datasets[1].data = [
+    setWibrationLevel(wibration: { time: number; value: number }) {
+      if (wibration.time < 1) {
+        this.wibrationChart.data.datasets[0].data = [
+          { x: wibration.time, y: wibration.value },
+        ];
+        this.wibrationChart.data.datasets[1].data = [
           { x: 0, y: this.maxWibrationLevel },
         ];
       } else {
-        this.wibrChart.data.datasets[0].data.push(wibr);
-        this.wibrChart.data.datasets[1].data = [
+        this.wibrationChart.data.datasets[0].data.push({
+          x: wibration.time,
+          y: wibration.value,
+        });
+        this.wibrationChart.data.datasets[1].data = [
           { x: 0, y: this.maxWibrationLevel },
-          { x: wibr.x, y: this.maxWibrationLevel },
+          { x: wibration.time, y: this.maxWibrationLevel },
         ];
       }
-      this.wibrChartKey++;
+      this.wibrationChartKey++;
 
-      if (wibr.y > this.maxWibrationLevel)
-        this.messages.unshift({
-          msg: "Przekroczono bezpieczny poziom drgań!",
-          date: this.getFormattedDate(),
+      if (wibration.value > this.maxWibrationLevel)
+        this.addMessage("Przekroczono bezpieczny poziom drgań!");
+    },
+    setCurrentLocation(currentLocation: { lat: number; lng: number }) {
+      const lostConnection =
+        isNaN(currentLocation.lat) ||
+        currentLocation.lat === null ||
+        isNaN(currentLocation.lng) ||
+        currentLocation.lng === null;
+
+      if (lostConnection) {
+        this.paths.currentPointBackground?.setOptions({
+          strokeColor: "#777777",
         });
-    },
-    setLocation(loc: { x: number; y: number }) {
-      // console.log("Szerokość: " + loc.y + ", długość: " + loc.x);
-      if (isNaN(loc.x) || loc.x === null || isNaN(loc.y) || loc.y === null) {
-        this.mapChart.data.datasets[0].elements.point.backgroundColor =
-          "#777777";
       } else {
-        this.mapChart.data.datasets[0].data = [loc];
-        this.mapChart.data.datasets[1].data[1] = loc;
-        this.mapChart.data.datasets[2].data[1] = loc;
-        this.mapChart.data.datasets[0].elements.point.backgroundColor =
-          "#0000FF";
+        const startLocation = this.paths.startPoint
+          ?.getPath()
+          .getAt(0) as google.maps.LatLng;
+        const endLocation = this.paths.endPoint
+          ?.getPath()
+          .getAt(0) as google.maps.LatLng;
+        this.paths.currentPointBorder?.setPath([
+          currentLocation,
+          currentLocation,
+        ]);
+        this.paths.currentPointBackground?.setPath([
+          currentLocation,
+          currentLocation,
+        ]);
+        this.paths.startLine?.setPath([startLocation, currentLocation]);
+        this.paths.endLine?.setPath([endLocation, currentLocation]);
+        this.paths.currentPointBackground?.setOptions({
+          strokeColor: "#0000FF",
+        });
       }
-      this.mapChartKey++;
     },
-    setTargetLocation(targetLoc: { x: number; y: number }) {
-      if (targetLoc.x === this.targetLoc.x && targetLoc.y === this.targetLoc.y)
+    setTargetLocation(targetLocation: { lat: number; lng: number }) {
+      if (
+        targetLocation.lat === this.targetLocation.lat &&
+        targetLocation.lng === this.targetLocation.lng
+      )
         return;
 
-      // console.log("Szerokość: " + target_loc.y + ", długość: " + target_loc.x);
-      this.targetLoc = { x: targetLoc.x, y: targetLoc.y };
-      const startLoc = this.mapChart.data.datasets[1].data[0] as {
-        x: number;
-        y: number;
-      };
-      this.mapChart.data.datasets[1].data = [targetLoc, startLoc];
-      this.mapChart.data.datasets[2].data = [startLoc, startLoc];
-      const maxScope = Math.max(
-        Math.abs(startLoc.x - targetLoc.x),
-        Math.abs(startLoc.y - targetLoc.y)
+      this.targetLocation = targetLocation;
+      const currentLocation = this.paths.currentPointBackground
+        ?.getPath()
+        .getAt(0) as google.maps.LatLng;
+      const startLocation = currentLocation;
+      this.paths.startLine?.setPath([startLocation, currentLocation]);
+      this.paths.endLine?.setPath([targetLocation, currentLocation]);
+      this.paths.startPoint?.setPath([startLocation, startLocation]);
+      this.paths.endPoint?.setPath([targetLocation, targetLocation]);
+      this.map?.setCenter({
+        lat: (startLocation.lat() + this.targetLocation.lat) / 2,
+        lng: (startLocation.lng() + this.targetLocation.lng) / 2,
+      });
+      const scope = Math.max(
+        Math.abs(startLocation.lat() - this.targetLocation.lat),
+        Math.abs(startLocation.lng() - this.targetLocation.lng)
       );
-      const limits = {
-        x_min: (startLoc.x + targetLoc.x) / 2 - 0.75 * maxScope,
-        x_max: (startLoc.x + targetLoc.x) / 2 + 0.75 * maxScope,
-        y_min: (startLoc.y + targetLoc.y) / 2 - 0.75 * maxScope,
-        y_max: (startLoc.y + targetLoc.y) / 2 + 0.75 * maxScope,
-      };
-      this.mapChart.options.scales.x.min = limits.x_min;
-      this.mapChart.options.scales.x.max = limits.x_max;
-      this.mapChart.options.scales.y.min = limits.y_min;
-      this.mapChart.options.scales.y.max = limits.y_max;
-      this.mapChart.options.scales.xAxes.min = limits.x_min;
-      this.mapChart.options.scales.xAxes.max = limits.x_max;
-      this.mapChart.options.scales.yAxes.min = limits.y_min;
-      this.mapChart.options.scales.yAxes.max = limits.y_max;
-      this.mapChart.options.scales.x.ticks.stepSize = maxScope / 2;
-      this.mapChart.options.scales.y.ticks.stepSize = maxScope / 2;
-      this.mapChart.options.scales.xAxes.ticks.stepSize = maxScope / 2;
-      this.mapChart.options.scales.yAxes.ticks.stepSize = maxScope / 2;
-      this.mapChartKey++;
+      this.map?.setZoom(7.8 - 1.45 * Math.log(scope));
     },
   },
-  mounted() {
-    this.updateServer("", { settemperature: { value: null } });
+  async mounted() {
+    this.updateServer("", { setTemperature: { value: null } });
     if (!this.dataGetter) {
       this.dataGetter = setInterval(async () => {
         const data = await this.getFromServer("");
-        const temp = data.temperature;
-        const wibr = data.wibration;
-        const loc = data.location;
-        const target_loc = data.target_loc;
+        if (data === null) return;
+        const temperature = data.temperature;
+        const wibration = data.wibration;
+        const currentLocation = data.currentLocation;
+        const targetLocation = data.targetLocation;
         const msg = data.msg;
-        if (temp.x !== null && temp.y !== null) this.setRealTemperature(temp);
-        if (wibr.x !== null && wibr.y !== null) this.setWibrationLevel(wibr);
-        this.setLocation(loc);
-        if (target_loc.x !== null && target_loc.y !== null)
-          this.setTargetLocation(target_loc);
+        if (temperature.time !== null && temperature.value !== null)
+          this.setRealTemperature(temperature);
+        if (wibration.time !== null && wibration.value !== null)
+          this.setWibrationLevel(wibration);
+        this.setCurrentLocation(currentLocation);
+        if (targetLocation.lat !== null && targetLocation.lng !== null)
+          this.setTargetLocation(targetLocation);
         if (
           this.messages.length === 0 ||
-          (msg.msg !== this.messages[0].msg &&
+          (msg.text !== this.messages[0].text &&
             msg.date >= this.messages[0].date)
         )
-          this.messages.unshift(msg);
+          this.addMessage(msg.text, msg.date);
       }, this.messageRate);
     }
+
+    const loader = new Loader({ apiKey: GOOGLE_MAPS_API_KEY });
+    await loader.load();
+    const position = { lat: 52.203, lng: 21.001 };
+    this.map = new google.maps.Map(this.$refs.mapDiv as HTMLElement, {
+      center: position,
+      zoom: 16,
+    });
+
+    const lineOptions = {
+      map: this.map,
+      strokeOpacity: 0,
+      icons: [
+        {
+          icon: {
+            path: "M 0,-1 0,1",
+            strokeOpacity: 1,
+            scale: 4,
+          },
+          offset: "0",
+          repeat: "20px",
+        },
+      ],
+    };
+    const grey = "#777777";
+    const blue = "#0000FF";
+    const white = "#FFFFFF";
+    this.paths.startLine = new google.maps.Polyline({
+      path: [position, position],
+      strokeColor: grey,
+      ...lineOptions,
+    });
+    this.paths.endLine = new google.maps.Polyline({
+      path: [position, position],
+      strokeColor: blue,
+      ...lineOptions,
+    });
+    this.paths.startPoint = new google.maps.Polyline({
+      map: this.map,
+      path: [position, position],
+      strokeColor: grey,
+      strokeWeight: 10,
+    });
+    this.paths.endPoint = new google.maps.Polyline({
+      map: this.map,
+      path: [position, position],
+      strokeColor: blue,
+      strokeWeight: 10,
+    });
+    this.paths.currentPointBorder = new google.maps.Polyline({
+      map: this.map,
+      path: [position, position],
+      strokeColor: white,
+      strokeWeight: 22,
+    });
+    this.paths.currentPointBackground = new google.maps.Polyline({
+      map: this.map,
+      path: [position, position],
+      strokeColor: blue,
+      strokeWeight: 18,
+    });
   },
   beforeMount() {
-    const tempData = {
+    const temperatureData = {
       datasets: [
         { data: [] },
         JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
@@ -255,31 +330,26 @@ export default defineComponent({
     tempOptions.scales.y.suggestedMin = -10;
     tempOptions.scales.y.suggestedMax = 40;
     tempOptions.scales.y.title.text = "Temperatura [\u00B0C]";
-    this.tempChart = {
-      data: tempData,
+    this.temperatureChart = {
+      data: temperatureData,
       options: tempOptions,
     };
 
-    const wibrData = {
+    const wibrationData = {
       datasets: [
         { data: [] },
         JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
       ],
     };
-    let wibrOptions = JSON.parse(JSON.stringify(scatterChartConfig.options));
-    wibrOptions.scales.y.suggestedMin = 0;
-    wibrOptions.scales.y.suggestedMax = 100;
-    wibrOptions.scales.y.title.text = "Poziom wibracji [%]";
-    this.wibrChart = {
-      data: wibrData,
-      options: wibrOptions,
-    };
-
-    const mapOptions = JSON.parse(JSON.stringify(mapChartConfig.options));
-    const mapData = JSON.parse(JSON.stringify(mapChartConfig.data));
-    this.mapChart = {
-      data: mapData,
-      options: mapOptions,
+    let wibrationOptions = JSON.parse(
+      JSON.stringify(scatterChartConfig.options)
+    );
+    wibrationOptions.scales.y.suggestedMin = 0;
+    wibrationOptions.scales.y.suggestedMax = 100;
+    wibrationOptions.scales.y.title.text = "Poziom wibracji [%]";
+    this.wibrationChart = {
+      data: wibrationData,
+      options: wibrationOptions,
     };
   },
 });
@@ -330,27 +400,22 @@ export default defineComponent({
           />
         </div>
         <div class="google-map">
-          <Scatter
-            style="background-color: rgb(187, 226, 198)"
-            :key="mapChartKey"
-            :data="mapChart.data"
-            :options="(mapChart.options as ChartOptions<'scatter'>)"
-          />
+          <div ref="mapDiv" style="width: 100%; height: 100%"></div>
         </div>
       </div>
       <div class="right-side">
         <div class="temperature-plot">
           <Scatter
-            :key="tempChartKey"
-            :data="tempChart.data"
-            :options="tempChart.options"
+            :key="temperatureChartKey"
+            :data="temperatureChart.data"
+            :options="temperatureChart.options"
           />
         </div>
         <div class="wibration-plot">
           <Scatter
-            :key="wibrChartKey"
-            :data="wibrChart.data"
-            :options="wibrChart.options"
+            :key="wibrationChartKey"
+            :data="wibrationChart.data"
+            :options="wibrationChart.options"
           />
         </div>
       </div>
@@ -359,7 +424,7 @@ export default defineComponent({
       <div class="message-box">
         <ul>
           <li v-for:="message in messages">
-            <label>{{ message.msg }}</label>
+            <label>{{ message.text }}</label>
             <label>{{ message.date }}</label>
           </li>
         </ul>
