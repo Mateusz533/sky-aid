@@ -1,7 +1,5 @@
-<script lang="ts">
-import { defineComponent } from "vue";
-import { shallowRef } from "@vue/runtime-dom";
-import axios from "axios";
+<script setup lang="ts">
+import { ref, shallowRef, onMounted, onBeforeMount } from "vue";
 
 import * as scatterChartConfig from "./scatterChartConfig";
 import { Scatter } from "vue-chartjs";
@@ -14,344 +12,348 @@ import {
   LineElement,
   Tooltip,
 } from "chart.js";
-
 Chart.register(LinearScale, PointElement, LineElement, Tooltip);
 
 import { Loader } from "@googlemaps/js-api-loader";
 const GOOGLE_MAPS_API_KEY = "AIzaSyAnbN24W9SsTUdMxjnwaVP0Htn8OZe4RqE";
 
-export default defineComponent({
-  name: "FridgeController",
-  components: { Scatter },
-  data() {
-    return {
-      dataGetter: null as number | null,
-      isConnected: false,
-      temperatureChart: shallowRef({
-        data: {} as ChartData<"scatter">,
-        options: {} as ChartOptions<"scatter">,
-      }),
-      temperatureChartKey: 0,
-      targetTemperature: 0,
-      maxTemperatureDeviation: 0,
-      wibrationChart: shallowRef({
-        data: {} as ChartData<"scatter">,
-        options: {} as ChartOptions<"scatter">,
-      }),
-      wibrationChartKey: 0,
-      maxWibrationLevel: 50,
-      map: null as google.maps.Map | null,
-      paths: {
-        startLine: null as google.maps.Polyline | null,
-        endLine: null as google.maps.Polyline | null,
-        startPoint: null as google.maps.Polyline | null,
-        endPoint: null as google.maps.Polyline | null,
-        currentPointBackground: null as google.maps.Polyline | null,
-        currentPointBorder: null as google.maps.Polyline | null,
-      },
-      targetLocation: { lat: Number(), lng: Number() },
-      messages: Array({ text: String(), date: String() }),
-      messageRate: 1000, // [ms]
-    };
-  },
-  methods: {
-    async getFromServer(name: string) {
-      try {
-        const res = await axios.get(`http://localhost:3000/output/${name}`);
-        if (!this.isConnected) {
-          this.isConnected = true;
-          this.addMessage("Połączono z serwerem.");
-        }
-        return res.data;
-      } catch (error) {
-        if (this.isConnected) {
-          this.isConnected = false;
-          this.addMessage("Utracono połączenie z serwerem!");
-        }
-        return null;
-      }
-    },
-    async updateServer(name: string, value: Object) {
-      try {
-        await axios.patch(`http://localhost:3000/input/${name}`, value);
-        if (!this.isConnected) {
-          this.isConnected = true;
-          this.addMessage("Połączono z serwerem.");
-        }
-      } catch (error) {
-        if (this.isConnected) {
-          this.isConnected = false;
-          this.addMessage("Utracono połączenie z serwerem!");
-        }
-      }
-    },
-    async setTemperature() {
-      await this.updateServer("", {
-        setTemperature: {
-          value: this.targetTemperature,
-        },
-      });
-    },
-    getFormattedDate() {
-      const currentTime = new Date();
-      const hours = currentTime.getHours();
-      const minutes = currentTime.getMinutes();
-      const seconds = currentTime.getSeconds();
-      let date = "";
-      if (hours < 10) date += "0";
-      if (hours == 1) date += "0:";
-      else date += hours.toString() + ":";
-      if (minutes < 10) date += "0";
-      if (minutes == 1) date += "0:";
-      else date += minutes.toString() + ":";
-      if (seconds < 10) date += "0";
-      if (seconds == 1) date += "0";
-      else date += seconds.toString();
+import axios from "axios";
+const SERVER_ADDRESS = "http://localhost:3000";
 
-      return date;
-    },
-    addMessage(text: string, date?: string) {
-      this.messages.unshift({
-        text: text,
-        date: date ? date : this.getFormattedDate(),
-      });
-    },
-    setRealTemperature(temperature: { time: number; value: number }) {
-      const minTemp = this.targetTemperature - this.maxTemperatureDeviation;
-      const maxTemp = this.targetTemperature + this.maxTemperatureDeviation;
-      if (temperature.time < 1) {
-        this.temperatureChart.data.datasets[0].data = [
-          { x: temperature.time, y: temperature.value },
-        ];
-        this.temperatureChart.data.datasets[1].data = [{ x: 0, y: minTemp }];
-        this.temperatureChart.data.datasets[2].data = [{ x: 0, y: maxTemp }];
-      } else {
-        this.temperatureChart.data.datasets[0].data.push({
-          x: temperature.time,
-          y: temperature.value,
-        });
-        this.temperatureChart.data.datasets[1].data = [
-          { x: 0, y: minTemp },
-          { x: temperature.time, y: minTemp },
-        ];
-        this.temperatureChart.data.datasets[2].data = [
-          { x: 0, y: maxTemp },
-          { x: temperature.time, y: maxTemp },
-        ];
-      }
-      this.temperatureChartKey++;
+const dataGetter = ref(null as number | null);
+const isConnected = ref(false);
 
-      if (this.maxTemperatureDeviation <= 0) return;
-      if (temperature.value > maxTemp)
-        this.addMessage("Temperatura wzrosła powyżej zakresu tolerancji!");
-      if (temperature.value < minTemp)
-        this.addMessage("Temperatura spadła poniżej zakresu tolerancji!");
-    },
-    setWibrationLevel(wibration: { time: number; value: number }) {
-      if (wibration.time < 1) {
-        this.wibrationChart.data.datasets[0].data = [
-          { x: wibration.time, y: wibration.value },
-        ];
-        this.wibrationChart.data.datasets[1].data = [
-          { x: 0, y: this.maxWibrationLevel },
-        ];
-      } else {
-        this.wibrationChart.data.datasets[0].data.push({
-          x: wibration.time,
-          y: wibration.value,
-        });
-        this.wibrationChart.data.datasets[1].data = [
-          { x: 0, y: this.maxWibrationLevel },
-          { x: wibration.time, y: this.maxWibrationLevel },
-        ];
-      }
-      this.wibrationChartKey++;
-
-      if (wibration.value > this.maxWibrationLevel)
-        this.addMessage("Przekroczono bezpieczny poziom drgań!");
-    },
-    setCurrentLocation(currentLocation: { lat: number; lng: number }) {
-      const lostConnection =
-        isNaN(currentLocation.lat) ||
-        currentLocation.lat === null ||
-        isNaN(currentLocation.lng) ||
-        currentLocation.lng === null;
-
-      if (lostConnection) {
-        this.paths.currentPointBackground?.setOptions({
-          strokeColor: "#777777",
-        });
-      } else {
-        const startLocation = this.paths.startPoint
-          ?.getPath()
-          .getAt(0) as google.maps.LatLng;
-        const endLocation = this.paths.endPoint
-          ?.getPath()
-          .getAt(0) as google.maps.LatLng;
-        this.paths.currentPointBorder?.setPath([
-          currentLocation,
-          currentLocation,
-        ]);
-        this.paths.currentPointBackground?.setPath([
-          currentLocation,
-          currentLocation,
-        ]);
-        this.paths.startLine?.setPath([startLocation, currentLocation]);
-        this.paths.endLine?.setPath([endLocation, currentLocation]);
-        this.paths.currentPointBackground?.setOptions({
-          strokeColor: "#0000FF",
-        });
-      }
-    },
-    setTargetLocation(targetLocation: { lat: number; lng: number }) {
-      if (
-        targetLocation.lat === this.targetLocation.lat &&
-        targetLocation.lng === this.targetLocation.lng
-      )
-        return;
-
-      this.targetLocation = targetLocation;
-      const currentLocation = this.paths.currentPointBackground
-        ?.getPath()
-        .getAt(0) as google.maps.LatLng;
-      const startLocation = currentLocation;
-      this.paths.startLine?.setPath([startLocation, currentLocation]);
-      this.paths.endLine?.setPath([targetLocation, currentLocation]);
-      this.paths.startPoint?.setPath([startLocation, startLocation]);
-      this.paths.endPoint?.setPath([targetLocation, targetLocation]);
-      this.map?.setCenter({
-        lat: (startLocation.lat() + this.targetLocation.lat) / 2,
-        lng: (startLocation.lng() + this.targetLocation.lng) / 2,
-      });
-      const scope = Math.max(
-        Math.abs(startLocation.lat() - this.targetLocation.lat),
-        Math.abs(startLocation.lng() - this.targetLocation.lng)
-      );
-      this.map?.setZoom(7.8 - 1.45 * Math.log(scope));
-    },
-  },
-  async mounted() {
-    this.updateServer("", { setTemperature: { value: null } });
-    if (!this.dataGetter) {
-      this.dataGetter = setInterval(async () => {
-        const data = await this.getFromServer("");
-        if (data === null) return;
-        const temperature = data.temperature;
-        const wibration = data.wibration;
-        const currentLocation = data.currentLocation;
-        const targetLocation = data.targetLocation;
-        const msg = data.msg;
-        if (temperature.time !== null && temperature.value !== null)
-          this.setRealTemperature(temperature);
-        if (wibration.time !== null && wibration.value !== null)
-          this.setWibrationLevel(wibration);
-        this.setCurrentLocation(currentLocation);
-        if (targetLocation.lat !== null && targetLocation.lng !== null)
-          this.setTargetLocation(targetLocation);
-        if (
-          this.messages.length === 0 ||
-          (msg.text !== this.messages[0].text &&
-            msg.date >= this.messages[0].date)
-        )
-          this.addMessage(msg.text, msg.date);
-      }, this.messageRate);
+async function getFromServer(name: string) {
+  try {
+    const res = await axios.get(`${SERVER_ADDRESS}/output/${name}`);
+    if (!isConnected.value) {
+      isConnected.value = true;
+      addMessage("Połączono z serwerem.");
     }
+    return res.data;
+  } catch (error) {
+    if (isConnected.value) {
+      isConnected.value = false;
+      addMessage("Utracono połączenie z serwerem!");
+    }
+    return null;
+  }
+}
+async function updateServer(name: string, value: Object) {
+  try {
+    await axios.patch(`${SERVER_ADDRESS}/input/${name}`, value);
+    if (!isConnected.value) {
+      isConnected.value = true;
+      addMessage("Połączono z serwerem.");
+    }
+  } catch (error) {
+    if (isConnected.value) {
+      isConnected.value = false;
+      addMessage("Utracono połączenie z serwerem!");
+    }
+  }
+}
 
-    const loader = new Loader({ apiKey: GOOGLE_MAPS_API_KEY });
-    await loader.load();
-    const position = { lat: 52.203, lng: 21.001 };
-    this.map = new google.maps.Map(this.$refs.mapDiv as HTMLElement, {
+/*Temperature*/
+const temperatureChart = shallowRef({
+  data: {} as ChartData<"scatter">,
+  options: {} as ChartOptions<"scatter">,
+});
+const temperatureChartKey = ref(0);
+const targetTemperature = ref(0);
+const maxTemperatureDeviation = ref(0);
+
+async function setTargetTemperature() {
+  await updateServer("", {
+    setTemperature: {
+      value: targetTemperature.value,
+    },
+  });
+}
+function setRealTemperature(temperature: { time: number; value: number }) {
+  const minTemp = targetTemperature.value - maxTemperatureDeviation.value;
+  const maxTemp = targetTemperature.value + maxTemperatureDeviation.value;
+  if (temperature.time < 1) {
+    temperatureChart.value.data.datasets[0].data = [
+      { x: temperature.time, y: temperature.value },
+    ];
+    temperatureChart.value.data.datasets[1].data = [{ x: 0, y: minTemp }];
+    temperatureChart.value.data.datasets[2].data = [{ x: 0, y: maxTemp }];
+  } else {
+    temperatureChart.value.data.datasets[0].data.push({
+      x: temperature.time,
+      y: temperature.value,
+    });
+    temperatureChart.value.data.datasets[1].data = [
+      { x: 0, y: minTemp },
+      { x: temperature.time, y: minTemp },
+    ];
+    temperatureChart.value.data.datasets[2].data = [
+      { x: 0, y: maxTemp },
+      { x: temperature.time, y: maxTemp },
+    ];
+  }
+  temperatureChartKey.value++;
+
+  if (maxTemperatureDeviation.value <= 0) return;
+  if (temperature.value > maxTemp)
+    addMessage("Temperatura wzrosła powyżej zakresu tolerancji!");
+  if (temperature.value < minTemp)
+    addMessage("Temperatura spadła poniżej zakresu tolerancji!");
+}
+
+/*Wibrations*/
+const wibrationChart = shallowRef({
+  data: {} as ChartData<"scatter">,
+  options: {} as ChartOptions<"scatter">,
+});
+const wibrationChartKey = ref(0);
+const maxWibrationLevel = ref(50);
+
+function setWibrationLevel(wibration: { time: number; value: number }) {
+  if (wibration.time < 1) {
+    wibrationChart.value.data.datasets[0].data = [
+      { x: wibration.time, y: wibration.value },
+    ];
+    wibrationChart.value.data.datasets[1].data = [
+      { x: 0, y: maxWibrationLevel.value },
+    ];
+  } else {
+    wibrationChart.value.data.datasets[0].data.push({
+      x: wibration.time,
+      y: wibration.value,
+    });
+    wibrationChart.value.data.datasets[1].data = [
+      { x: 0, y: maxWibrationLevel.value },
+      { x: wibration.time, y: maxWibrationLevel.value },
+    ];
+  }
+  wibrationChartKey.value++;
+
+  if (wibration.value > maxWibrationLevel.value)
+    addMessage("Przekroczono bezpieczny poziom drgań!");
+}
+
+/*Map*/
+const map = ref(null as google.maps.Map | null);
+const paths = ref({
+  startLine: null as google.maps.Polyline | null,
+  endLine: null as google.maps.Polyline | null,
+  startPoint: null as google.maps.Polyline | null,
+  endPoint: null as google.maps.Polyline | null,
+  currentPointBackground: null as google.maps.Polyline | null,
+  currentPointBorder: null as google.maps.Polyline | null,
+});
+const targetLocation = ref({ lat: Number(), lng: Number() });
+
+function setCurrentLocation(currentLocation: { lat: number; lng: number }) {
+  const lostConnection =
+    isNaN(currentLocation.lat) ||
+    currentLocation.lat === null ||
+    isNaN(currentLocation.lng) ||
+    currentLocation.lng === null;
+
+  if (lostConnection) {
+    paths.value.currentPointBackground?.setOptions({
+      strokeColor: "#777777",
+    });
+  } else {
+    const startLocation = paths.value.startPoint
+      ?.getPath()
+      .getAt(0) as google.maps.LatLng;
+    const endLocation = paths.value.endPoint
+      ?.getPath()
+      .getAt(0) as google.maps.LatLng;
+    paths.value.currentPointBorder?.setPath([currentLocation, currentLocation]);
+    paths.value.currentPointBackground?.setPath([
+      currentLocation,
+      currentLocation,
+    ]);
+    paths.value.startLine?.setPath([startLocation, currentLocation]);
+    paths.value.endLine?.setPath([endLocation, currentLocation]);
+    paths.value.currentPointBackground?.setOptions({
+      strokeColor: "#0000FF",
+    });
+  }
+}
+function setTargetLocation(newtargetLocation: { lat: number; lng: number }) {
+  if (
+    targetLocation.value.lat === newtargetLocation.lat &&
+    targetLocation.value.lng === newtargetLocation.lng
+  )
+    return;
+
+  targetLocation.value = newtargetLocation;
+  const currentLocation = paths.value.currentPointBackground
+    ?.getPath()
+    .getAt(0) as google.maps.LatLng;
+  const startLocation = currentLocation;
+  paths.value.startLine?.setPath([startLocation, currentLocation]);
+  paths.value.endLine?.setPath([newtargetLocation, currentLocation]);
+  paths.value.startPoint?.setPath([startLocation, startLocation]);
+  paths.value.endPoint?.setPath([newtargetLocation, newtargetLocation]);
+  map.value?.setCenter({
+    lat: (startLocation.lat() + newtargetLocation.lat) / 2,
+    lng: (startLocation.lng() + newtargetLocation.lng) / 2,
+  });
+  const scope = Math.max(
+    Math.abs(startLocation.lat() - newtargetLocation.lat),
+    Math.abs(startLocation.lng() - newtargetLocation.lng)
+  );
+  map.value?.setZoom(7.8 - 1.45 * Math.log(scope));
+}
+
+/*Messages*/
+const messages = ref(Array({ text: String(), date: String() }));
+const messageRate = 1000; // [ms]
+
+function addMessage(text: string, date?: string) {
+  messages.value.unshift({
+    text: text,
+    date: date ? date : getFormattedDate(),
+  });
+}
+function getFormattedDate() {
+  const currentTime = new Date();
+  const hours = currentTime.getHours();
+  const minutes = currentTime.getMinutes();
+  const seconds = currentTime.getSeconds();
+  let date = "";
+  if (hours < 10) date += "0";
+  if (hours == 1) date += "0:";
+  else date += hours.toString() + ":";
+  if (minutes < 10) date += "0";
+  if (minutes == 1) date += "0:";
+  else date += minutes.toString() + ":";
+  if (seconds < 10) date += "0";
+  if (seconds == 1) date += "0";
+  else date += seconds.toString();
+
+  return date;
+}
+
+onMounted(async () => {
+  updateServer("", { setTemperature: { value: null } });
+  if (!dataGetter.value) {
+    dataGetter.value = setInterval(async () => {
+      const data = await getFromServer("");
+      if (data === null) return;
+      const temperature = data.temperature;
+      const wibration = data.wibration;
+      const currentLocation = data.currentLocation;
+      const targetLocation = data.targetLocation;
+      const msg = data.msg;
+      if (temperature.time !== null && temperature.value !== null)
+        setRealTemperature(temperature);
+      if (wibration.time !== null && wibration.value !== null)
+        setWibrationLevel(wibration);
+      setCurrentLocation(currentLocation);
+      if (targetLocation.lat !== null && targetLocation.lng !== null)
+        setTargetLocation(targetLocation);
+      if (
+        messages.value.length === 0 ||
+        (msg.text !== messages.value[0].text &&
+          msg.date >= messages.value[0].date)
+      )
+        addMessage(msg.text, msg.date);
+    }, messageRate);
+  }
+
+  const loader = new Loader({ apiKey: GOOGLE_MAPS_API_KEY });
+  await loader.load();
+  const position = { lat: 52.203, lng: 21.001 };
+  map.value = new google.maps.Map(
+    document.getElementById("mapDiv") as HTMLElement,
+    {
       center: position,
       zoom: 16,
-    });
+    }
+  );
 
-    const lineOptions = {
-      map: this.map,
-      strokeOpacity: 0,
-      icons: [
-        {
-          icon: {
-            path: "M 0,-1 0,1",
-            strokeOpacity: 1,
-            scale: 4,
-          },
-          offset: "0",
-          repeat: "20px",
+  const lineOptions = {
+    map: map.value,
+    strokeOpacity: 0,
+    icons: [
+      {
+        icon: {
+          path: "M 0,-1 0,1",
+          strokeOpacity: 1,
+          scale: 4,
         },
-      ],
-    };
-    const grey = "#777777";
-    const blue = "#0000FF";
-    const white = "#FFFFFF";
-    this.paths.startLine = new google.maps.Polyline({
-      path: [position, position],
-      strokeColor: grey,
-      ...lineOptions,
-    });
-    this.paths.endLine = new google.maps.Polyline({
-      path: [position, position],
-      strokeColor: blue,
-      ...lineOptions,
-    });
-    this.paths.startPoint = new google.maps.Polyline({
-      map: this.map,
-      path: [position, position],
-      strokeColor: grey,
-      strokeWeight: 10,
-    });
-    this.paths.endPoint = new google.maps.Polyline({
-      map: this.map,
-      path: [position, position],
-      strokeColor: blue,
-      strokeWeight: 10,
-    });
-    this.paths.currentPointBorder = new google.maps.Polyline({
-      map: this.map,
-      path: [position, position],
-      strokeColor: white,
-      strokeWeight: 22,
-    });
-    this.paths.currentPointBackground = new google.maps.Polyline({
-      map: this.map,
-      path: [position, position],
-      strokeColor: blue,
-      strokeWeight: 18,
-    });
-  },
-  beforeMount() {
-    const temperatureData = {
-      datasets: [
-        { data: [] },
-        JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
-        JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
-      ],
-    };
-    let tempOptions = JSON.parse(JSON.stringify(scatterChartConfig.options));
-    tempOptions.scales.y.suggestedMin = -10;
-    tempOptions.scales.y.suggestedMax = 40;
-    tempOptions.scales.y.title.text = "Temperatura [\u00B0C]";
-    this.temperatureChart = {
-      data: temperatureData,
-      options: tempOptions,
-    };
+        offset: "0",
+        repeat: "20px",
+      },
+    ],
+  };
+  const grey = "#777777";
+  const blue = "#0000FF";
+  const white = "#FFFFFF";
+  paths.value.startLine = new google.maps.Polyline({
+    path: [position, position],
+    strokeColor: grey,
+    ...lineOptions,
+  });
+  paths.value.endLine = new google.maps.Polyline({
+    path: [position, position],
+    strokeColor: blue,
+    ...lineOptions,
+  });
+  paths.value.startPoint = new google.maps.Polyline({
+    map: map.value,
+    path: [position, position],
+    strokeColor: grey,
+    strokeWeight: 10,
+  });
+  paths.value.endPoint = new google.maps.Polyline({
+    map: map.value,
+    path: [position, position],
+    strokeColor: blue,
+    strokeWeight: 10,
+  });
+  paths.value.currentPointBorder = new google.maps.Polyline({
+    map: map.value,
+    path: [position, position],
+    strokeColor: white,
+    strokeWeight: 22,
+  });
+  paths.value.currentPointBackground = new google.maps.Polyline({
+    map: map.value,
+    path: [position, position],
+    strokeColor: blue,
+    strokeWeight: 18,
+  });
+});
+onBeforeMount(() => {
+  const temperatureData = {
+    datasets: [
+      { data: [] },
+      JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
+      JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
+    ],
+  };
+  let tempOptions = JSON.parse(JSON.stringify(scatterChartConfig.options));
+  tempOptions.scales.y.suggestedMin = -10;
+  tempOptions.scales.y.suggestedMax = 40;
+  tempOptions.scales.y.title.text = "Temperatura [\u00B0C]";
+  temperatureChart.value = {
+    data: temperatureData,
+    options: tempOptions,
+  };
 
-    const wibrationData = {
-      datasets: [
-        { data: [] },
-        JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
-      ],
-    };
-    let wibrationOptions = JSON.parse(
-      JSON.stringify(scatterChartConfig.options)
-    );
-    wibrationOptions.scales.y.suggestedMin = 0;
-    wibrationOptions.scales.y.suggestedMax = 100;
-    wibrationOptions.scales.y.title.text = "Poziom wibracji [%]";
-    this.wibrationChart = {
-      data: wibrationData,
-      options: wibrationOptions,
-    };
-  },
+  const wibrationData = {
+    datasets: [
+      { data: [] },
+      JSON.parse(JSON.stringify(scatterChartConfig.dataset)),
+    ],
+  };
+  let wibrationOptions = JSON.parse(JSON.stringify(scatterChartConfig.options));
+  wibrationOptions.scales.y.suggestedMin = 0;
+  wibrationOptions.scales.y.suggestedMax = 100;
+  wibrationOptions.scales.y.title.text = "Poziom wibracji [%]";
+  wibrationChart.value = {
+    data: wibrationData,
+    options: wibrationOptions,
+  };
 });
 </script>
 
@@ -372,7 +374,7 @@ export default defineComponent({
             max="36"
             step="0.1"
             v-model="targetTemperature"
-            @focusout="setTemperature()"
+            @focusout="setTargetTemperature()"
           />
         </div>
         <div class="temperature-controller">
@@ -400,7 +402,7 @@ export default defineComponent({
           />
         </div>
         <div class="google-map">
-          <div ref="mapDiv" style="width: 100%; height: 100%"></div>
+          <div id="mapDiv" style="width: 100%; height: 100%"></div>
         </div>
       </div>
       <div class="right-side">

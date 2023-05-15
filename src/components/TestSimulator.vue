@@ -1,231 +1,242 @@
-<script lang="ts">
-import { defineComponent } from "vue";
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from "vue";
+
 import axios from "axios";
+const SERVER_ADDRESS = "http://localhost:3000";
 
-export default defineComponent({
-  name: "TestSimulator",
-  data() {
-    return {
-      isSwitchedOn: false,
-      dataGetter: null as number | null,
-      messageInterval: null as number | null,
-      messageRate: 1000, // [ms]
-      temperatureRegulator: null as number | null,
-      regulationTime: 10000,
-      targetTemperature: 0,
-      realTemperature: 20,
-      temperatureOscillationsAmplitude: 0,
-      wibrationLevel: 0,
-      wibrationLevelOscillationsAmplitude: 0,
-      isSignalGPS: true,
-      flightInterval: null as number | null,
-      flightTime: 60, // [messageRate]
-      targetPosition: {
-        lat: 52.2,
-        lng: 21,
-      },
-      currentPosition: {
-        lat: 52.203,
-        lng: 21.001,
-      },
-    };
-  },
-  methods: {
-    async getFromServer(name: string) {
-      try {
-        const res = await axios.get(`http://localhost:3000/input/${name}`);
-        return res.data;
-      } catch (error) {
-        return null;
-      }
-    },
-    async updateServer(name: string, value: Object) {
-      try {
-        await axios.patch(`http://localhost:3000/output/${name}`, value);
-      } catch (error) {
-        // console.log(error);
-      }
-    },
-    switchOn() {
-      if (this.isSwitchedOn) return;
-      this.sendMessage("Włączono urządzenie.");
-      this.isSwitchedOn = true;
-    },
-    async switchOff() {
-      if (!this.isSwitchedOn) return;
+const dataGetter = ref(null as number | null);
 
-      await this.updateServer("", {
-        msg: {
-          text: "Wyłączono urządzenie.",
-          date: this.getFormattedDate(),
-        },
-        currentLocation: { lat: NaN, lng: NaN },
-      });
+async function getFromServer(name: string) {
+  try {
+    const res = await axios.get(`${SERVER_ADDRESS}/input/${name}`);
+    return res.data;
+  } catch (error) {
+    return null;
+  }
+}
+async function updateServer(name: string, value: Object) {
+  try {
+    await axios.patch(`${SERVER_ADDRESS}/output/${name}`, value);
+  } catch (error) {
+    // console.log(error);
+  }
+}
 
-      this.isSwitchedOn = false;
-      if (this.messageInterval) clearInterval(this.messageInterval);
-      this.messageInterval = null;
-      if (this.temperatureRegulator) clearInterval(this.temperatureRegulator);
-      this.temperatureRegulator = null;
-      if (this.flightInterval) clearInterval(this.flightInterval);
-      this.flightInterval = null;
-      if (this.dataGetter) clearInterval(this.dataGetter);
-      this.dataGetter = null;
-    },
-    putRightCard() {
-      if (!this.isSwitchedOn) return;
-      this.sendMessage("Poprawny odczyt karty. Drzwi otwarte.");
-    },
-    putWrongCard() {
-      if (!this.isSwitchedOn) return;
-      this.sendMessage("Błędny odczyt karty!");
-    },
-    loseSignalGPS() {
-      if (!this.isSwitchedOn) return;
-      this.sendMessage("Utracono sygnał GPS!");
-      this.isSignalGPS = false;
-    },
-    restoreSignalGPS() {
-      if (!this.isSwitchedOn) return;
-      this.sendMessage("Przywrócono sygnał GPS.");
-      this.isSignalGPS = true;
-    },
-    async startFlight() {
-      if (!this.isSwitchedOn) return;
+/*Switching device*/
+const isSwitchedOn = ref(false);
 
-      if (this.flightInterval) clearInterval(this.flightInterval);
-      let secs = 0;
-      this.flightInterval = setInterval(() => {
-        secs++;
-        if (secs < this.flightTime) {
-          this.currentPosition.lat +=
-            (this.targetPosition.lat - this.currentPosition.lat) /
-            (this.flightTime - secs);
-          this.currentPosition.lng +=
-            (this.targetPosition.lng - this.currentPosition.lng) /
-            (this.flightTime - secs);
-        } else {
-          this.currentPosition = { ...this.targetPosition };
-          this.stopFlight();
-        }
-      }, this.messageRate);
+function switchOn() {
+  if (isSwitchedOn.value) return;
+  sendMessage("Włączono urządzenie.");
+  isSwitchedOn.value = true;
+}
+async function switchOff() {
+  if (!isSwitchedOn.value) return;
 
-      await this.updateServer("", {
-        targetLocation: this.targetPosition,
-        msg: {
-          text: "Podróż rozpoczęta.",
-          date: this.getFormattedDate(),
-        },
-      });
+  await updateServer("", {
+    msg: {
+      text: "Wyłączono urządzenie.",
+      date: getFormattedDate(),
     },
-    async stopFlight() {
-      if (!this.isSwitchedOn) return;
-      if (this.flightInterval) clearInterval(this.flightInterval);
-      this.flightInterval = null;
-      this.sendMessage("Podróż zakończona.");
-    },
-    async sendMessage(text: string) {
-      await this.updateServer("", {
-        msg: {
-          text: text,
-          date: this.getFormattedDate(),
-        },
-      });
-    },
-    getFormattedDate() {
-      const currentTime = new Date();
-      const hours = currentTime.getHours();
-      const minutes = currentTime.getMinutes();
-      const seconds = currentTime.getSeconds();
-      let date = "";
-      if (hours < 10) date += "0";
-      if (hours == 1) date += "0:";
-      else date += hours.toString() + ":";
-      if (minutes < 10) date += "0";
-      if (minutes == 1) date += "0:";
-      else date += minutes.toString() + ":";
-      if (seconds < 10) date += "0";
-      if (seconds == 1) date += "0";
-      else date += seconds.toString();
+    currentLocation: { lat: NaN, lng: NaN },
+  });
 
-      return date;
-    },
-    startPublishing() {
-      if (!this.isSwitchedOn) return;
+  isSwitchedOn.value = false;
+  if (messageInterval.value) clearInterval(messageInterval.value);
+  messageInterval.value = null;
+  if (temperatureRegulator.value) clearInterval(temperatureRegulator.value);
+  temperatureRegulator.value = null;
+  if (flightInterval.value) clearInterval(flightInterval.value);
+  flightInterval.value = null;
+  if (dataGetter.value) clearInterval(dataGetter.value);
+  dataGetter.value = null;
+}
 
-      const startTime = Math.floor(new Date().getTime() / 1000);
-      this.sendData(startTime);
-      if (!this.messageInterval) {
-        this.messageInterval = setInterval(async () => {
-          this.sendData(startTime);
-        }, this.messageRate);
-      }
-    },
-    async stopPublishing() {
-      if (this.messageInterval) {
-        clearInterval(this.messageInterval);
-        this.messageInterval = null;
-        await this.updateServer("", {
-          currentLocation: { lat: NaN, lng: NaN },
-        });
-      }
-    },
-    async sendData(startTime: number) {
-      const currentTime = new Date().getTime() / 1000;
-      const secs = Math.floor(currentTime) - startTime;
-      const randCosDist1 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
-      const temperature =
-        this.realTemperature +
-        this.temperatureOscillationsAmplitude * randCosDist1;
-      const randCosDist2 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
-      const wibration =
-        this.wibrationLevel +
-        this.wibrationLevelOscillationsAmplitude * randCosDist2;
-      const currentLocation = this.isSignalGPS
-        ? this.currentPosition
-        : { lat: NaN, lng: NaN };
+function putRightCard() {
+  if (!isSwitchedOn.value) return;
+  sendMessage("Poprawny odczyt karty. Drzwi otwarte.");
+}
+function putWrongCard() {
+  if (!isSwitchedOn.value) return;
+  sendMessage("Błędny odczyt karty!");
+}
 
-      await this.updateServer("", {
-        temperature: { time: secs, value: temperature },
-        wibration: { time: secs, value: wibration },
-        currentLocation: currentLocation,
-      });
-    },
-  },
-  mounted() {
-    this.updateServer("", {
-      msg: {
-        text: "",
-        date: "",
-      },
-      temperature: { time: NaN, value: NaN },
-      wibration: { time: NaN, value: NaN },
-      currentLocation: { lat: NaN, lng: NaN },
-      targetLocation: { lat: NaN, lng: NaN },
-    });
+/*Flight*/
+const flightInterval = ref(null as number | null);
+const flightTime = 60; // [messageRate]
+const targetPosition = ref({
+  lat: 52.2,
+  lng: 21,
+});
+const currentPosition = ref({
+  lat: 52.203,
+  lng: 21.001,
+});
 
-    if (!this.dataGetter) {
-      this.dataGetter = setInterval(async () => {
-        const data = await this.getFromServer("");
-        if (data === null) return;
-        this.targetTemperature = parseFloat(data.setTemperature.value);
-        if (!this.isSwitchedOn || this.temperatureRegulator) return;
+async function startFlight() {
+  if (!isSwitchedOn.value) return;
 
-        this.temperatureRegulator = setInterval(() => {
-          if (!isNaN(this.targetTemperature))
-            this.realTemperature +=
-              (this.messageRate / this.regulationTime) *
-              (this.targetTemperature - this.realTemperature);
-        }, this.messageRate);
-      }, this.messageRate);
+  if (flightInterval.value) clearInterval(flightInterval.value);
+  let secs = 0;
+  flightInterval.value = setInterval(() => {
+    secs++;
+    if (secs < flightTime) {
+      currentPosition.value.lat +=
+        (targetPosition.value.lat - currentPosition.value.lat) /
+        (flightTime - secs);
+      currentPosition.value.lng +=
+        (targetPosition.value.lng - currentPosition.value.lng) /
+        (flightTime - secs);
+    } else {
+      currentPosition.value = { ...targetPosition.value };
+      stopFlight();
     }
-  },
-  beforeDestroy() {
-    if (this.messageInterval) clearInterval(this.messageInterval);
-    if (this.temperatureRegulator) clearInterval(this.temperatureRegulator);
-    if (this.flightInterval) clearInterval(this.flightInterval);
-    if (this.dataGetter) clearInterval(this.dataGetter);
-  },
+  }, messageRate);
+
+  await updateServer("", {
+    targetLocation: targetPosition.value,
+    msg: {
+      text: "Podróż rozpoczęta.",
+      date: getFormattedDate(),
+    },
+  });
+}
+async function stopFlight() {
+  if (!isSwitchedOn.value) return;
+  if (flightInterval.value) clearInterval(flightInterval.value);
+  flightInterval.value = null;
+  sendMessage("Podróż zakończona.");
+}
+
+/*GPS*/
+const isSignalGPS = ref(true);
+
+function loseSignalGPS() {
+  if (!isSwitchedOn.value || !isSignalGPS.value) return;
+  sendMessage("Utracono sygnał GPS!");
+  isSignalGPS.value = false;
+}
+function restoreSignalGPS() {
+  if (!isSwitchedOn.value || isSignalGPS.value) return;
+  sendMessage("Przywrócono sygnał GPS.");
+  isSignalGPS.value = true;
+}
+
+/*Data transmition*/
+const temperatureRegulator = ref(null as number | null);
+const regulationTime = 10000;
+const targetTemperature = ref(0);
+const realTemperature = ref(20);
+const temperatureOscillationsAmplitude = ref(0);
+const wibrationLevel = ref(0);
+const wibrationLevelOscillationsAmplitude = ref(0);
+
+function startPublishing() {
+  if (!isSwitchedOn.value) return;
+
+  const startTime = Math.floor(new Date().getTime() / 1000);
+  sendData(startTime);
+  if (!messageInterval.value) {
+    messageInterval.value = setInterval(async () => {
+      sendData(startTime);
+    }, messageRate);
+  }
+}
+async function stopPublishing() {
+  if (messageInterval.value) {
+    clearInterval(messageInterval.value);
+    messageInterval.value = null;
+    await updateServer("", {
+      currentLocation: { lat: NaN, lng: NaN },
+    });
+  }
+}
+async function sendData(startTime: number) {
+  const currentTime = new Date().getTime() / 1000;
+  const secs = Math.floor(currentTime) - startTime;
+  const randCosDist1 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
+  const temperature =
+    realTemperature.value +
+    temperatureOscillationsAmplitude.value * randCosDist1;
+  const randCosDist2 = (Math.asin(2 * Math.random() - 1) * 2) / Math.PI;
+  const wibration =
+    wibrationLevel.value +
+    wibrationLevelOscillationsAmplitude.value * randCosDist2;
+  const currentLocation = isSignalGPS.value
+    ? currentPosition.value
+    : { lat: NaN, lng: NaN };
+
+  await updateServer("", {
+    temperature: { time: secs, value: temperature },
+    wibration: { time: secs, value: wibration },
+    currentLocation: currentLocation,
+  });
+}
+
+/*Messages*/
+const messageInterval = ref(null as number | null);
+const messageRate = 1000; // [ms]
+
+async function sendMessage(text: string) {
+  await updateServer("", {
+    msg: {
+      text: text,
+      date: getFormattedDate(),
+    },
+  });
+}
+function getFormattedDate() {
+  const currentTime = new Date();
+  const hours = currentTime.getHours();
+  const minutes = currentTime.getMinutes();
+  const seconds = currentTime.getSeconds();
+  let date = "";
+  if (hours < 10) date += "0";
+  if (hours == 1) date += "0:";
+  else date += hours.toString() + ":";
+  if (minutes < 10) date += "0";
+  if (minutes == 1) date += "0:";
+  else date += minutes.toString() + ":";
+  if (seconds < 10) date += "0";
+  if (seconds == 1) date += "0";
+  else date += seconds.toString();
+
+  return date;
+}
+
+onMounted(() => {
+  updateServer("", {
+    msg: {
+      text: "",
+      date: "",
+    },
+    temperature: { time: NaN, value: NaN },
+    wibration: { time: NaN, value: NaN },
+    currentLocation: { lat: NaN, lng: NaN },
+    targetLocation: { lat: NaN, lng: NaN },
+  });
+
+  if (!dataGetter.value) {
+    dataGetter.value = setInterval(async () => {
+      const data = await getFromServer("");
+      if (data === null) return;
+      targetTemperature.value = parseFloat(data.setTemperature.value);
+      if (!isSwitchedOn.value || temperatureRegulator.value) return;
+
+      temperatureRegulator.value = setInterval(() => {
+        if (!isNaN(targetTemperature.value))
+          realTemperature.value +=
+            (messageRate / regulationTime) *
+            (targetTemperature.value - realTemperature.value);
+      }, messageRate);
+    }, messageRate);
+  }
+});
+onBeforeUnmount(() => {
+  if (messageInterval.value) clearInterval(messageInterval.value);
+  if (temperatureRegulator.value) clearInterval(temperatureRegulator.value);
+  if (flightInterval.value) clearInterval(flightInterval.value);
+  if (dataGetter.value) clearInterval(dataGetter.value);
 });
 </script>
 
