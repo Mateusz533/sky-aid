@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount } from "vue";
 
 import axios from "axios";
-const SERVER_ADDRESS = "http://localhost:3000";
+const SERVER_ADDRESS = process.env.VUE_APP_SERVER_ADDRESS;
 
 const dataGetter = ref(null as number | null);
 

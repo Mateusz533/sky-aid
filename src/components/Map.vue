@@ -2,7 +2,7 @@
 import { ref, watch, onMounted } from "vue";
 
 import { Loader } from "@googlemaps/js-api-loader";
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const GOOGLE_MAPS_API_KEY = process.env.VUE_APP_GOOGLE_MAPS_API_KEY;
 
 const props = defineProps<{
   currentLocation: { lat: number; lng: number };

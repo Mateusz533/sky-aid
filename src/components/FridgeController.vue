@@ -20,7 +20,7 @@ const currentPosition = ref({ lat: 0 as number, lng: 0 as number });
 const targetPosition = ref({ lat: 0 as number, lng: 0 as number });
 
 import axios from "axios";
-const SERVER_ADDRESS = "http://localhost:3000";
+const SERVER_ADDRESS: string = process.env.VUE_APP_SERVER_ADDRESS;
 
 const dataGetter = ref(null as number | null);
 const isConnected = ref(false);
